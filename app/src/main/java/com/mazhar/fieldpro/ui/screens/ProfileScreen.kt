@@ -1,5 +1,6 @@
 package com.mazhar.fieldpro.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -8,27 +9,38 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mazhar.fieldpro.data.FieldProRepository
 import com.mazhar.fieldpro.data.User
 import com.mazhar.fieldpro.ui.theme.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     user: User,
+    repository: FieldProRepository,
     onLogoutClick: () -> Unit
 ) {
+    val context = LocalContext.current
+    var showChangePasswordDialog by remember { mutableStateOf(false) }
+    var newPassword by remember { mutableStateOf("") }
+    var confirmNewPassword by remember { mutableStateOf("") }
+    var isChangingPassword by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -127,15 +139,19 @@ fun ProfileScreen(
                     SettingsRow(
                         title = "Account Preferences",
                         icon = Icons.Default.Settings,
-                        onClick = {}
+                        onClick = {
+                            Toast.makeText(context, "Preferences screen is coming soon!", Toast.LENGTH_SHORT).show()
+                        }
                     )
                     
-                    Divider(color = CardBorder, thickness = 1.dp)
+                    HorizontalDivider(color = CardBorder, thickness = 1.dp)
                     
                     SettingsRow(
-                        title = "Privacy & Security",
+                        title = "Privacy & Security (Change Password)",
                         icon = Icons.Default.Lock,
-                        onClick = {}
+                        onClick = {
+                            showChangePasswordDialog = true
+                        }
                     )
                 }
             }
@@ -168,6 +184,121 @@ fun ProfileScreen(
         }
 
         Spacer(modifier = Modifier.height(24.dp))
+    }
+
+    // Change Password Dialog
+    if (showChangePasswordDialog) {
+        AlertDialog(
+            onDismissRequest = { 
+                if (!isChangingPassword) {
+                    showChangePasswordDialog = false
+                    newPassword = ""
+                    confirmNewPassword = ""
+                }
+            },
+            title = { Text("Change Password", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text("Enter a new password for your account.", color = TextMuted)
+                    
+                    Column {
+                        Text(
+                            text = "New Password",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextDark,
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                        OutlinedTextField(
+                            value = newPassword,
+                            onValueChange = { newPassword = it },
+                            placeholder = { Text("••••••••") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            enabled = !isChangingPassword,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = BluePrimary,
+                                unfocusedBorderColor = CardBorder
+                            )
+                        )
+                    }
+
+                    Column {
+                        Text(
+                            text = "Confirm New Password",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextDark,
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                        OutlinedTextField(
+                            value = confirmNewPassword,
+                            onValueChange = { confirmNewPassword = it },
+                            placeholder = { Text("••••••••") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            enabled = !isChangingPassword,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = BluePrimary,
+                                unfocusedBorderColor = CardBorder
+                            )
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (newPassword.length < 6) {
+                            Toast.makeText(context, "Password must be at least 6 characters.", Toast.LENGTH_SHORT).show()
+                        } else if (newPassword != confirmNewPassword) {
+                            Toast.makeText(context, "Passwords do not match.", Toast.LENGTH_SHORT).show()
+                        } else {
+                            isChangingPassword = true
+                            repository.updatePassword(
+                                newPassword = newPassword,
+                                onSuccess = {
+                                    isChangingPassword = false
+                                    showChangePasswordDialog = false
+                                    newPassword = ""
+                                    confirmNewPassword = ""
+                                    Toast.makeText(context, "Password updated successfully!", Toast.LENGTH_LONG).show()
+                                },
+                                onFailure = { err ->
+                                    isChangingPassword = false
+                                    Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                }
+                            )
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = BluePrimary),
+                    enabled = !isChangingPassword
+                ) {
+                    if (isChangingPassword) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Update")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { 
+                        showChangePasswordDialog = false 
+                        newPassword = ""
+                        confirmNewPassword = ""
+                    },
+                    enabled = !isChangingPassword
+                ) {
+                    Text("Cancel", color = TextDark)
+                }
+            },
+            shape = RoundedCornerShape(20.dp)
+        )
     }
 }
 
@@ -212,7 +343,7 @@ fun SettingsRow(
         }
         
         Icon(
-            imageVector = Icons.Default.KeyboardArrowRight,
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = "Navigate",
             tint = TextMuted,
             modifier = Modifier.size(24.dp)

@@ -2,6 +2,8 @@ package com.mazhar.fieldpro.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -10,6 +12,8 @@ import java.util.Locale
 
 class FieldProRepository(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("fieldpro_prefs", Context.MODE_PRIVATE)
+    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
+    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
 
     companion object {
         private const val KEY_USER = "user_data"
@@ -35,11 +39,126 @@ class FieldProRepository(context: Context) {
 
     // User Session
     fun isUserLoggedIn(): Boolean {
-        return prefs.getBoolean(KEY_LOGGED_IN, false)
+        return auth.currentUser != null
     }
 
     fun setUserLoggedIn(loggedIn: Boolean) {
         prefs.edit().putBoolean(KEY_LOGGED_IN, loggedIn).apply()
+    }
+
+    fun registerUser(
+        user: User,
+        password: String,
+        onSuccess: () -> Unit,
+        onFailure: (String) -> Unit
+    ) {
+        auth.createUserWithEmailAndPassword(user.email, password)
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    val uid = task.result?.user?.uid
+                    if (uid != null) {
+                        val userMap = hashMapOf(
+                            "fullName" to user.fullName,
+                            "email" to user.email,
+                            "contactNumber" to user.contactNumber,
+                            "role" to user.role
+                        )
+                        firestore.collection("users").document(uid)
+                            .set(userMap)
+                            .addOnSuccessListener {
+                                saveUser(user)
+                                onSuccess()
+                            }
+                            .addOnFailureListener { e ->
+                                onFailure(e.localizedMessage ?: "Failed to save profile details")
+                            }
+                    } else {
+                        onFailure("User ID is null")
+                    }
+                } else {
+                    onFailure(task.exception?.localizedMessage ?: "Registration failed")
+                }
+            }
+    }
+
+    fun authenticateUser(
+        email: String,
+        password: String,
+        onSuccess: (User) -> Unit,
+        onFailure: (String) -> Unit
+    ) {
+        auth.signInWithEmailAndPassword(email, password)
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    val uid = task.result?.user?.uid
+                    if (uid != null) {
+                        firestore.collection("users").document(uid).get()
+                            .addOnSuccessListener { document ->
+                                if (document != null && document.exists()) {
+                                    val user = User(
+                                        fullName = document.getString("fullName") ?: "",
+                                        email = document.getString("email") ?: email,
+                                        contactNumber = document.getString("contactNumber") ?: "",
+                                        role = document.getString("role") ?: "TECHNICIAN"
+                                    )
+                                    saveUser(user)
+                                    onSuccess(user)
+                                } else {
+                                    val defaultUser = User(
+                                        fullName = auth.currentUser?.displayName ?: "Alex Johnson",
+                                        email = email,
+                                        contactNumber = "+1 555-0199",
+                                        role = "TECHNICIAN"
+                                    )
+                                    saveUser(defaultUser)
+                                    onSuccess(defaultUser)
+                                }
+                            }
+                            .addOnFailureListener { e ->
+                                onFailure(e.localizedMessage ?: "Failed to retrieve profile details")
+                            }
+                    } else {
+                        onFailure("User ID is null")
+                    }
+                } else {
+                    onFailure(task.exception?.localizedMessage ?: "Authentication failed")
+                }
+            }
+    }
+
+    fun updatePassword(
+        newPassword: String,
+        onSuccess: () -> Unit,
+        onFailure: (String) -> Unit
+    ) {
+        val user = auth.currentUser
+        if (user != null) {
+            user.updatePassword(newPassword)
+                .addOnCompleteListener { task ->
+                    if (task.isSuccessful) {
+                        onSuccess()
+                    } else {
+                        onFailure(task.exception?.localizedMessage ?: "Failed to update password")
+                    }
+                }
+        } else {
+            onFailure("User is not signed in")
+        }
+    }
+
+    fun resetPassword(
+        email: String,
+        onSuccess: () -> Unit,
+        onFailure: (String) -> Unit
+    ) {
+        auth.sendPasswordResetEmail(email)
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    onSuccess()
+                } else {
+                    onFailure(task.exception?.localizedMessage ?: "Failed to send reset email")
+                }
+            }
     }
 
     fun getUser(): User {
@@ -164,6 +283,7 @@ class FieldProRepository(context: Context) {
     }
 
     fun clearData() {
+        auth.signOut()
         prefs.edit().clear().apply()
         // Re-initialize default session data but keep logged out
         val defaultUser = User(
@@ -175,7 +295,6 @@ class FieldProRepository(context: Context) {
         saveUser(defaultUser)
         saveJobs(getMockJobs())
         saveNotifications(getMockNotifications())
-        setUserLoggedIn(false)
     }
 
     // Helpers JSON

@@ -53,7 +53,7 @@ class MainActivity : ComponentActivity() {
                 // Live list states
                 var jobsList by remember { mutableStateOf(repository.getJobs()) }
                 var notificationsList by remember { mutableStateOf(repository.getNotifications()) }
-                val currentUser by remember { mutableStateOf(repository.getUser()) }
+                var currentUser by remember { mutableStateOf(repository.getUser()) }
 
                 // Refresh helper
                 val refreshData = {
@@ -98,11 +98,11 @@ class MainActivity : ComponentActivity() {
                             when (targetScreen) {
                                 AppScreen.LOGIN -> {
                                     LoginScreen(
-                                        onLoginSuccess = { email ->
-                                            repository.setUserLoggedIn(true)
+                                        repository = repository,
+                                        onLoginSuccess = { user ->
+                                            currentUser = user
                                             isLoggedIn = true
                                             currentScreen = AppScreen.MAIN
-                                            Toast.makeText(this@MainActivity, "Signed in as $email", Toast.LENGTH_SHORT).show()
                                         }
                                     )
                                 }
@@ -140,9 +140,11 @@ class MainActivity : ComponentActivity() {
                                         "Profile" -> {
                                             ProfileScreen(
                                                 user = currentUser,
+                                                repository = repository,
                                                 onLogoutClick = {
                                                     repository.clearData()
                                                     isLoggedIn = false
+                                                    currentUser = repository.getUser()
                                                     selectedTab = "Home"
                                                     refreshData()
                                                     currentScreen = AppScreen.LOGIN
