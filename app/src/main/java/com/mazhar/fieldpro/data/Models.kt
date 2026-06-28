@@ -33,7 +33,10 @@ data class ServiceRequest(
     var findings: String? = null,
     var actionsTaken: String? = null,
     var completionRemarks: String? = null,
-    var reportTimestamp: String? = null
+    var reportTimestamp: String? = null,
+    var createdTimestamp: String? = null,
+    var assignedTimestamp: String? = null,
+    var inProgressTimestamp: String? = null
 )
 
 data class AlertNotification(

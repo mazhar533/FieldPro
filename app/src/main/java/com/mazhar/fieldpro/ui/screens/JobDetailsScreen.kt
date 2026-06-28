@@ -154,7 +154,7 @@ fun JobDetailsScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = CardBg),
                 border = BorderStroke(1.dp, CardBorder)
             ) {
                 Column(
@@ -185,7 +185,7 @@ fun JobDetailsScreen(
                         )
                     }
 
-                    Divider(color = CardBorder, thickness = 1.dp)
+                    HorizontalDivider(color = CardBorder, thickness = 1.dp)
 
                     // Contact Row with Call button
                     Row(
@@ -226,7 +226,7 @@ fun JobDetailsScreen(
                         }
                     }
 
-                    Divider(color = CardBorder, thickness = 1.dp)
+                    HorizontalDivider(color = CardBorder, thickness = 1.dp)
 
                     // Location Row with Map button
                     Row(
@@ -273,7 +273,7 @@ fun JobDetailsScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = CardBg),
                 border = BorderStroke(1.dp, CardBorder)
             ) {
                 Column(
@@ -301,7 +301,7 @@ fun JobDetailsScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(containerColor = CardBg),
                     border = BorderStroke(1.dp, CardBorder)
                 ) {
                     Column(
@@ -346,7 +346,7 @@ fun JobDetailsScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = CardBg),
                 border = BorderStroke(1.dp, CardBorder)
             ) {
                 Column(
@@ -360,32 +360,57 @@ fun JobDetailsScreen(
                         color = TextDark
                     )
                     
+                    val formatTimestamp: (String?, String, String) -> Pair<String, String> = { timestamp, fallbackDate, fallbackTime ->
+                        if (timestamp.isNullOrEmpty()) {
+                            Pair(fallbackDate, fallbackTime)
+                        } else {
+                            val parts = timestamp.split(",")
+                            val date = parts.firstOrNull()?.trim() ?: fallbackDate
+                            val rawTime = parts.lastOrNull()?.trim() ?: fallbackTime
+                            
+                            val timeParts = rawTime.split(" ")
+                            val timeNum = timeParts.firstOrNull()?.split(":") ?: emptyList()
+                            val amPm = timeParts.lastOrNull() ?: ""
+                            val cleanTime = if (timeNum.size >= 2) {
+                                "${timeNum[0]}:${timeNum[1]} $amPm"
+                            } else {
+                                rawTime
+                            }
+                            Pair(date, cleanTime)
+                        }
+                    }
+
+                    val (pendingDate, pendingTime) = formatTimestamp(job.createdTimestamp, job.serviceDate, job.serviceTime)
+                    val (assignedDate, assignedTime) = formatTimestamp(job.assignedTimestamp, "--/--/----", "--:--")
+                    val (inProgressDate, inProgressTime) = formatTimestamp(job.inProgressTimestamp, "--/--/----", "--:--")
+                    val (completedDate, completedTime) = formatTimestamp(job.reportTimestamp, "--/--/----", "--:--")
+
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         TimelineItem(
                             status = "Pending",
-                            date = "06/22/2026",
-                            time = "09:00 AM",
+                            date = pendingDate,
+                            time = pendingTime,
                             isCompleted = true,
                             isLast = false
                         )
                         TimelineItem(
                             status = "Assigned",
-                            date = job.serviceDate,
-                            time = job.serviceTime,
-                            isCompleted = job.status != JobStatus.PENDING,
+                            date = assignedDate,
+                            time = assignedTime,
+                            isCompleted = !job.assignedTimestamp.isNullOrEmpty() || job.status != JobStatus.PENDING,
                             isLast = false
                         )
                         TimelineItem(
                             status = "In Progress",
-                            date = job.serviceDate,
-                            time = if (job.status == JobStatus.IN_PROGRESS || job.status == JobStatus.COMPLETED) "08:30 AM" else "--:--",
-                            isCompleted = job.status == JobStatus.IN_PROGRESS || job.status == JobStatus.COMPLETED,
+                            date = inProgressDate,
+                            time = inProgressTime,
+                            isCompleted = !job.inProgressTimestamp.isNullOrEmpty() || job.status == JobStatus.COMPLETED,
                             isLast = false
                         )
                         TimelineItem(
                             status = "Completed",
-                            date = if (job.status == JobStatus.COMPLETED) job.serviceDate else "--/--/----",
-                            time = if (job.status == JobStatus.COMPLETED) job.serviceTime else "--:--",
+                            date = completedDate,
+                            time = completedTime,
                             isCompleted = job.status == JobStatus.COMPLETED,
                             isLast = true
                         )

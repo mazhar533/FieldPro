@@ -209,7 +209,7 @@ fun LoginScreen(
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = BluePrimary,
                                     selectedLabelColor = Color.White,
-                                    containerColor = Color.White,
+                                    containerColor = CardBg,
                                     labelColor = TextDark
                                 )
                             )

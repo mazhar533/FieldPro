@@ -121,7 +121,7 @@ fun HomeScreen(
                                 text = "$activeCount",
                                 fontSize = 48.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = TextDark
+                                color = TextDarkColor
                             )
                             Text(
                                 text = "Active Jobs",
@@ -222,7 +222,7 @@ fun HomeScreen(
                             onJobClick(upNextJob.id)
                         },
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(containerColor = CardBg),
                     border = BorderStroke(1.dp, CardBorder)
                 ) {
                     Column(
@@ -283,7 +283,7 @@ fun HomeScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(containerColor = CardBg),
                     border = BorderStroke(1.dp, CardBorder)
                 ) {
                     Box(
@@ -328,7 +328,7 @@ fun StatsRowCard(
             .graphicsLayer(scaleX = scale, scaleY = scale)
             .clickable(interactionSource = interactionSource, indication = null) { onClick() },
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = CardBg),
         border = BorderStroke(1.dp, CardBorder)
     ) {
         Row(

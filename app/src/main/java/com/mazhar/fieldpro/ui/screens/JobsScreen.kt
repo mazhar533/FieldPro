@@ -81,7 +81,7 @@ fun JobsScreen(
                         .background(backgroundColor)
                         .clickable { selectedTab = tab }
                         .then(
-                            if (borderStroke != null) Modifier.background(Color.White) else Modifier
+                            if (borderStroke != null) Modifier.background(CardBg) else Modifier
                         )
                         .padding(horizontal = 20.dp, vertical = 10.dp),
                     contentAlignment = Alignment.Center
@@ -164,7 +164,7 @@ fun JobCard(
             .graphicsLayer(scaleX = scale, scaleY = scale)
             .clickable(interactionSource = interactionSource, indication = null) { onClick() },
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = CardBg),
         border = BorderStroke(1.dp, CardBorder)
     ) {
         Column(

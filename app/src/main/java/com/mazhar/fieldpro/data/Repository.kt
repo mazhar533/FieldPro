@@ -200,11 +200,22 @@ class FieldProRepository(context: Context) {
         prefs.edit().putString(KEY_JOBS, arr.toString()).apply()
     }
 
-    fun updateJobStatus(jobId: String, status: JobStatus) {
+    fun updateJobStatus(jobId: String, status: JobStatus, onSuccess: () -> Unit = {}, onFailure: (String) -> Unit = {}) {
         val jobs = getJobs().toMutableList()
         val index = jobs.indexOfFirst { it.id == jobId }
+        var assignedTime: String? = null
+        var inProgressTime: String? = null
         if (index != -1) {
+            val sdf = SimpleDateFormat("MM/dd/yyyy, hh:mm:ss a", Locale.getDefault())
+            val timeNow = sdf.format(Date())
             jobs[index].status = status
+            if (status == JobStatus.ASSIGNED) {
+                jobs[index].assignedTimestamp = timeNow
+                assignedTime = timeNow
+            } else if (status == JobStatus.IN_PROGRESS) {
+                jobs[index].inProgressTimestamp = timeNow
+                inProgressTime = timeNow
+            }
             saveJobs(jobs)
             
             // Generate notification for status update
@@ -214,15 +225,36 @@ class FieldProRepository(context: Context) {
                 icon = NotificationIcon.CLOCK
             )
         }
+
+        val updates = mutableMapOf<String, Any>(
+            "status" to status.name
+        )
+        if (status == JobStatus.ASSIGNED && assignedTime != null) {
+            updates["assignedTimestamp"] = assignedTime
+        } else if (status == JobStatus.IN_PROGRESS && inProgressTime != null) {
+            updates["inProgressTimestamp"] = inProgressTime
+        }
+
+        firestore.collection("jobs").document(jobId)
+            .update(updates)
+            .addOnSuccessListener { onSuccess() }
+            .addOnFailureListener { e -> onFailure(e.localizedMessage ?: "Failed to update status on server") }
     }
 
-    fun submitServiceReport(jobId: String, findings: String, actionsTaken: String, remarks: String) {
+    fun submitServiceReport(
+        jobId: String, 
+        findings: String, 
+        actionsTaken: String, 
+        remarks: String,
+        onSuccess: () -> Unit = {},
+        onFailure: (String) -> Unit = {}
+    ) {
+        val sdf = SimpleDateFormat("MM/dd/yyyy, hh:mm:ss a", Locale.getDefault())
+        val currentTimestamp = sdf.format(Date())
+        
         val jobs = getJobs().toMutableList()
         val index = jobs.indexOfFirst { it.id == jobId }
         if (index != -1) {
-            val sdf = SimpleDateFormat("MM/dd/yyyy, hh:mm:ss a", Locale.getDefault())
-            val currentTimestamp = sdf.format(Date())
-            
             jobs[index].status = JobStatus.COMPLETED
             jobs[index].findings = findings
             jobs[index].actionsTaken = actionsTaken
@@ -237,6 +269,19 @@ class FieldProRepository(context: Context) {
                 icon = NotificationIcon.BRIEFCASE
             )
         }
+
+        val updates = mapOf(
+            "status" to JobStatus.COMPLETED.name,
+            "findings" to findings,
+            "actionsTaken" to actionsTaken,
+            "completionRemarks" to remarks,
+            "reportTimestamp" to currentTimestamp
+        )
+
+        firestore.collection("jobs").document(jobId)
+            .update(updates)
+            .addOnSuccessListener { onSuccess() }
+            .addOnFailureListener { e -> onFailure(e.localizedMessage ?: "Failed to submit report to server") }
     }
 
     // Notifications
@@ -314,6 +359,9 @@ class FieldProRepository(context: Context) {
         obj.put("actionsTaken", req.actionsTaken ?: JSONObject.NULL)
         obj.put("completionRemarks", req.completionRemarks ?: JSONObject.NULL)
         obj.put("reportTimestamp", req.reportTimestamp ?: JSONObject.NULL)
+        obj.put("createdTimestamp", req.createdTimestamp ?: JSONObject.NULL)
+        obj.put("assignedTimestamp", req.assignedTimestamp ?: JSONObject.NULL)
+        obj.put("inProgressTimestamp", req.inProgressTimestamp ?: JSONObject.NULL)
         return obj
     }
 
@@ -332,7 +380,10 @@ class FieldProRepository(context: Context) {
             findings = if (obj.isNull("findings")) null else obj.getString("findings"),
             actionsTaken = if (obj.isNull("actionsTaken")) null else obj.getString("actionsTaken"),
             completionRemarks = if (obj.isNull("completionRemarks")) null else obj.getString("completionRemarks"),
-            reportTimestamp = if (obj.isNull("reportTimestamp")) null else obj.getString("reportTimestamp")
+            reportTimestamp = if (obj.isNull("reportTimestamp")) null else obj.getString("reportTimestamp"),
+            createdTimestamp = if (obj.isNull("createdTimestamp")) null else obj.getString("createdTimestamp"),
+            assignedTimestamp = if (obj.isNull("assignedTimestamp")) null else obj.getString("assignedTimestamp"),
+            inProgressTimestamp = if (obj.isNull("inProgressTimestamp")) null else obj.getString("inProgressTimestamp")
         )
     }
 
@@ -435,5 +486,121 @@ class FieldProRepository(context: Context) {
                 isRead = true
             )
         )
+    }
+
+    private fun serviceRequestToMap(req: ServiceRequest): Map<String, Any?> {
+        return mapOf(
+            "id" to req.id,
+            "customerName" to req.customerName,
+            "serviceType" to req.serviceType,
+            "issueDescription" to req.issueDescription,
+            "status" to req.status.name,
+            "assignedTechnician" to req.assignedTechnician,
+            "serviceDate" to req.serviceDate,
+            "serviceTime" to req.serviceTime,
+            "contactNumber" to req.contactNumber,
+            "location" to req.location,
+            "findings" to req.findings,
+            "actionsTaken" to req.actionsTaken,
+            "completionRemarks" to req.completionRemarks,
+            "reportTimestamp" to req.reportTimestamp,
+            "createdTimestamp" to req.createdTimestamp,
+            "assignedTimestamp" to req.assignedTimestamp,
+            "inProgressTimestamp" to req.inProgressTimestamp
+        )
+    }
+
+    private fun mapToServiceRequest(map: Map<String, Any?>): ServiceRequest {
+        return ServiceRequest(
+            id = map["id"] as? String ?: "",
+            customerName = map["customerName"] as? String ?: "",
+            serviceType = map["serviceType"] as? String ?: "",
+            issueDescription = map["issueDescription"] as? String ?: "",
+            status = JobStatus.valueOf(map["status"] as? String ?: "PENDING"),
+            assignedTechnician = map["assignedTechnician"] as? String ?: "",
+            serviceDate = map["serviceDate"] as? String ?: "",
+            serviceTime = map["serviceTime"] as? String ?: "",
+            contactNumber = map["contactNumber"] as? String ?: "",
+            location = map["location"] as? String ?: "",
+            findings = map["findings"] as? String,
+            actionsTaken = map["actionsTaken"] as? String,
+            completionRemarks = map["completionRemarks"] as? String,
+            reportTimestamp = map["reportTimestamp"] as? String,
+            createdTimestamp = map["createdTimestamp"] as? String,
+            assignedTimestamp = map["assignedTimestamp"] as? String,
+            inProgressTimestamp = map["inProgressTimestamp"] as? String
+        )
+    }
+
+    fun createJob(job: ServiceRequest, onSuccess: () -> Unit, onFailure: (String) -> Unit) {
+        val sdf = SimpleDateFormat("MM/dd/yyyy, hh:mm:ss a", Locale.getDefault())
+        job.createdTimestamp = sdf.format(Date())
+        
+        firestore.collection("jobs").document(job.id)
+            .set(serviceRequestToMap(job))
+            .addOnSuccessListener { onSuccess() }
+            .addOnFailureListener { e -> onFailure(e.localizedMessage ?: "Failed to create job") }
+    }
+
+    fun getJobsForTechnician(email: String, onSuccess: (List<ServiceRequest>) -> Unit, onFailure: (String) -> Unit) {
+        firestore.collection("jobs")
+            .whereEqualTo("assignedTechnician", email)
+            .get()
+            .addOnSuccessListener { result ->
+                val list = mutableListOf<ServiceRequest>()
+                for (doc in result) {
+                    list.add(mapToServiceRequest(doc.data))
+                }
+                saveJobs(list)
+                onSuccess(list)
+            }
+            .addOnFailureListener { e ->
+                onSuccess(getJobs())
+            }
+    }
+
+    fun getAllJobsForAdmin(onSuccess: (List<ServiceRequest>) -> Unit, onFailure: (String) -> Unit) {
+        firestore.collection("jobs")
+            .get()
+            .addOnSuccessListener { result ->
+                val list = mutableListOf<ServiceRequest>()
+                for (doc in result) {
+                    list.add(mapToServiceRequest(doc.data))
+                }
+                onSuccess(list)
+            }
+            .addOnFailureListener { e ->
+                onFailure(e.localizedMessage ?: "Failed to get jobs")
+            }
+    }
+
+    fun getAllTechnicians(onSuccess: (List<User>) -> Unit, onFailure: (String) -> Unit) {
+        firestore.collection("users")
+            .whereEqualTo("role", "TECHNICIAN")
+            .get()
+            .addOnSuccessListener { result ->
+                val list = mutableListOf<User>()
+                for (doc in result) {
+                    val user = User(
+                        fullName = doc.getString("fullName") ?: "",
+                        email = doc.getString("email") ?: "",
+                        contactNumber = doc.getString("contactNumber") ?: "",
+                        role = doc.getString("role") ?: "TECHNICIAN"
+                    )
+                    list.add(user)
+                }
+                onSuccess(list)
+            }
+            .addOnFailureListener { e ->
+                onFailure(e.localizedMessage ?: "Failed to fetch technicians")
+            }
+    }
+
+    fun isDarkModeEnabled(): Boolean {
+        return prefs.getBoolean("dark_mode", false)
+    }
+
+    fun setDarkModeEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("dark_mode", enabled).apply()
     }
 }

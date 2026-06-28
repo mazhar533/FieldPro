@@ -4,6 +4,8 @@ import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,6 +35,8 @@ import com.mazhar.fieldpro.ui.theme.*
 fun ProfileScreen(
     user: User,
     repository: FieldProRepository,
+    isDarkMode: Boolean,
+    onDarkModeToggle: (Boolean) -> Unit,
     onLogoutClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -41,10 +45,12 @@ fun ProfileScreen(
     var confirmNewPassword by remember { mutableStateOf("") }
     var isChangingPassword by remember { mutableStateOf(false) }
 
+    val scrollState = rememberScrollState()
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(BackgroundLight)
+            .verticalScroll(scrollState)
             .padding(horizontal = 24.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
@@ -82,7 +88,7 @@ fun ProfileScreen(
                     Icon(
                         imageVector = Icons.Default.Person,
                         contentDescription = "Avatar",
-                        tint = TextDark,
+                        tint = TextDarkColor,
                         modifier = Modifier.size(48.dp)
                     )
                 }
@@ -92,7 +98,7 @@ fun ProfileScreen(
                         text = user.fullName,
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TextDark
+                        color = TextDarkColor
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
@@ -114,7 +120,7 @@ fun ProfileScreen(
                         text = user.email,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = TextDark
+                        color = TextDarkColor
                     )
                 }
             }
@@ -132,7 +138,7 @@ fun ProfileScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = CardBg),
                 border = BorderStroke(1.dp, CardBorder)
             ) {
                 Column {
@@ -153,11 +159,52 @@ fun ProfileScreen(
                             showChangePasswordDialog = true
                         }
                     )
+                    
+                    HorizontalDivider(color = CardBorder, thickness = 1.dp)
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 18.dp, horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(BackgroundLight),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = null,
+                                    tint = TextMuted,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Text(
+                                text = "Dark Mode",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextDark
+                            )
+                        }
+                        Switch(
+                            checked = isDarkMode,
+                            onCheckedChange = onDarkModeToggle,
+                            colors = SwitchDefaults.colors(checkedThumbColor = BluePrimary)
+                        )
+                    }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.weight(1f))
+        Spacer(modifier = Modifier.height(24.dp))
 
         // Log Out Button
         Button(

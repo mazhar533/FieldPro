@@ -1,5 +1,7 @@
 package com.mazhar.fieldpro.ui.theme
 
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 val Purple80 = Color(0xFFD0BCFF)
@@ -24,7 +26,13 @@ val GreenLightBg = Color(0xFFE6F4EA)
 val RedPending = Color(0xFFD93025)
 val RedLightBg = Color(0xFFFCE8E6)
 
-val BackgroundLight = Color(0xFFF8FAFC)
-val CardBorder = Color(0xFFE2E8F0)
-val TextDark = Color(0xFF1E293B)
-val TextMuted = Color(0xFF64748B)
+val BackgroundLightColor = Color(0xFFF8FAFC)
+val CardBorderColor = Color(0xFFE2E8F0)
+val TextDarkColor = Color(0xFF1E293B)
+val TextMutedColor = Color(0xFF64748B)
+
+val BackgroundLight: Color @Composable get() = MaterialTheme.colorScheme.background
+val CardBorder: Color @Composable get() = MaterialTheme.colorScheme.outlineVariant
+val TextDark: Color @Composable get() = MaterialTheme.colorScheme.onSurface
+val TextMuted: Color @Composable get() = if (MaterialTheme.colorScheme.background == Color(0xFF0F172A)) Color(0xFF94A3B8) else TextMutedColor
+val CardBg: Color @Composable get() = MaterialTheme.colorScheme.surface

@@ -26,6 +26,7 @@ import com.mazhar.fieldpro.ui.screens.*
 import com.mazhar.fieldpro.ui.theme.BackgroundLight
 import com.mazhar.fieldpro.ui.theme.BluePrimary
 import com.mazhar.fieldpro.ui.theme.FieldProTheme
+import com.mazhar.fieldpro.ui.theme.CardBg
 import androidx.core.net.toUri
 
 enum class AppScreen {
@@ -44,7 +45,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            FieldProTheme {
+            var isDarkMode by remember { mutableStateOf(repository.isDarkModeEnabled()) }
+            FieldProTheme(darkTheme = isDarkMode) {
                 var isLoggedIn by remember { mutableStateOf(repository.isUserLoggedIn()) }
                 var currentScreen by remember { mutableStateOf(if (isLoggedIn) AppScreen.MAIN else AppScreen.LOGIN) }
                 var selectedTab by remember { mutableStateOf("Home") }
@@ -57,8 +59,27 @@ class MainActivity : ComponentActivity() {
 
                 // Refresh helper
                 val refreshData = {
-                    jobsList = repository.getJobs()
+                    if (currentUser.role == "TECHNICIAN") {
+                        repository.getJobsForTechnician(
+                            email = currentUser.email,
+                            onSuccess = { list -> jobsList = list },
+                            onFailure = {}
+                        )
+                    } else {
+                        jobsList = repository.getJobs()
+                    }
                     notificationsList = repository.getNotifications()
+                }
+
+                // Dynamic Firestore sync for Technicians
+                LaunchedEffect(isLoggedIn, currentUser) {
+                    if (isLoggedIn && currentUser.role == "TECHNICIAN") {
+                        repository.getJobsForTechnician(
+                            email = currentUser.email,
+                            onSuccess = { list -> jobsList = list },
+                            onFailure = {}
+                        )
+                    }
                 }
 
                 // Handle back pressed or custom back navigation
@@ -73,7 +94,7 @@ class MainActivity : ComponentActivity() {
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     bottomBar = {
-                        if (currentScreen == AppScreen.MAIN) {
+                        if (currentScreen == AppScreen.MAIN && currentUser.role == "TECHNICIAN") {
                             BottomNavigationBar(
                                 selectedTab = selectedTab,
                                 onTabSelected = { selectedTab = it }
@@ -107,49 +128,73 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                                 AppScreen.MAIN -> {
-                                    when (selectedTab) {
-                                        "Home" -> {
-                                            HomeScreen(
-                                                userName = currentUser.fullName.split(" ").firstOrNull() ?: "Alex",
-                                                jobs = jobsList,
-                                                onViewAllJobsClick = { selectedTab = "Jobs" },
-                                                onJobClick = { jobId ->
-                                                    selectedJobId = jobId
-                                                    currentScreen = AppScreen.JOB_DETAILS
-                                                }
-                                            )
-                                        }
-                                        "Jobs" -> {
-                                            JobsScreen(
-                                                jobs = jobsList,
-                                                onJobClick = { jobId ->
-                                                    selectedJobId = jobId
-                                                    currentScreen = AppScreen.JOB_DETAILS
-                                                }
-                                            )
-                                        }
-                                        "Alerts" -> {
-                                            AlertsScreen(
-                                                notifications = notificationsList,
-                                                onNotificationClick = { notifId ->
-                                                    repository.markNotificationAsRead(notifId)
-                                                    refreshData()
-                                                }
-                                            )
-                                        }
-                                        "Profile" -> {
-                                            ProfileScreen(
-                                                user = currentUser,
-                                                repository = repository,
-                                                onLogoutClick = {
-                                                    repository.clearData()
-                                                    isLoggedIn = false
-                                                    currentUser = repository.getUser()
-                                                    selectedTab = "Home"
-                                                    refreshData()
-                                                    currentScreen = AppScreen.LOGIN
-                                                }
-                                            )
+                                    if (currentUser.role == "ADMIN") {
+                                         AdminDashboardScreen(
+                                             repository = repository,
+                                             isDarkMode = isDarkMode,
+                                             onDarkModeToggle = { enabled ->
+                                                 repository.setDarkModeEnabled(enabled)
+                                                 isDarkMode = enabled
+                                             },
+                                             onLogoutClick = {
+                                                 repository.clearData()
+                                                 isLoggedIn = false
+                                                 currentUser = repository.getUser()
+                                                 selectedTab = "Home"
+                                                 refreshData()
+                                                 currentScreen = AppScreen.LOGIN
+                                             }
+                                         )
+                                    } else {
+                                        when (selectedTab) {
+                                            "Home" -> {
+                                                HomeScreen(
+                                                    userName = currentUser.fullName.split(" ").firstOrNull() ?: "Alex",
+                                                    jobs = jobsList,
+                                                    onViewAllJobsClick = { selectedTab = "Jobs" },
+                                                    onJobClick = { jobId ->
+                                                        selectedJobId = jobId
+                                                        currentScreen = AppScreen.JOB_DETAILS
+                                                    }
+                                                )
+                                            }
+                                            "Jobs" -> {
+                                                JobsScreen(
+                                                    jobs = jobsList,
+                                                    onJobClick = { jobId ->
+                                                        selectedJobId = jobId
+                                                        currentScreen = AppScreen.JOB_DETAILS
+                                                    }
+                                                )
+                                            }
+                                            "Alerts" -> {
+                                                AlertsScreen(
+                                                    notifications = notificationsList,
+                                                    onNotificationClick = { notifId ->
+                                                        repository.markNotificationAsRead(notifId)
+                                                        refreshData()
+                                                    }
+                                                )
+                                            }
+                                            "Profile" -> {
+                                                 ProfileScreen(
+                                                     user = currentUser,
+                                                     repository = repository,
+                                                     isDarkMode = isDarkMode,
+                                                     onDarkModeToggle = { enabled ->
+                                                         repository.setDarkModeEnabled(enabled)
+                                                         isDarkMode = enabled
+                                                     },
+                                                     onLogoutClick = {
+                                                         repository.clearData()
+                                                         isLoggedIn = false
+                                                         currentUser = repository.getUser()
+                                                         selectedTab = "Home"
+                                                         refreshData()
+                                                         currentScreen = AppScreen.LOGIN
+                                                     }
+                                                 )
+                                            }
                                         }
                                     }
                                 }
@@ -237,9 +282,9 @@ fun BottomNavigationBar(
     )
 
     NavigationBar(
-        containerColor = Color.White,
+        containerColor = CardBg,
         tonalElevation = 8.dp,
-        modifier = Modifier.background(Color.White)
+        modifier = Modifier.background(CardBg)
     ) {
         items.forEach { item ->
             NavigationBarItem(

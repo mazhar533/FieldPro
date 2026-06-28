@@ -112,7 +112,7 @@ fun NotificationCard(
             .graphicsLayer(scaleX = scale, scaleY = scale)
             .clickable(interactionSource = interactionSource, indication = null) { onClick() },
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = CardBg),
         border = BorderStroke(1.dp, cardBorderColor)
     ) {
         Row(
