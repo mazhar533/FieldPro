@@ -12,6 +12,7 @@ android {
     defaultConfig {
         applicationId = "com.mazhar.fieldpro"
         minSdk = 26
+        //noinspection OldTargetApi
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -43,11 +44,16 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
+    //noinspection LoginCredentials
     implementation(libs.androidx.credentials)
+    //noinspection LoginCredentials
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    //noinspection LoginCredentials
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
+    implementation(libs.play.services.location)
+    //noinspection LoginCredentials
     implementation(libs.googleid)
     implementation(libs.androidx.compose.material.icons.core)
     implementation(libs.androidx.compose.material.icons.extended)

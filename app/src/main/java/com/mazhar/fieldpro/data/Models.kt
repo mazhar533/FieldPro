@@ -4,7 +4,8 @@ enum class JobStatus {
     PENDING,
     ASSIGNED,
     IN_PROGRESS,
-    COMPLETED
+    COMPLETED,
+    REJECTED
 }
 
 enum class NotificationIcon {
@@ -16,7 +17,8 @@ data class User(
     val fullName: String,
     val email: String,
     val contactNumber: String,
-    val role: String
+    val role: String,
+    val expertise: String = ""
 )
 
 data class ServiceRequest(
@@ -36,7 +38,12 @@ data class ServiceRequest(
     var reportTimestamp: String? = null,
     var createdTimestamp: String? = null,
     var assignedTimestamp: String? = null,
-    var inProgressTimestamp: String? = null
+    var inProgressTimestamp: String? = null,
+    var evidenceImageBase64: String? = null,
+    var startLatitude: Double? = null,
+    var startLongitude: Double? = null,
+    var completionLatitude: Double? = null,
+    var completionLongitude: Double? = null
 )
 
 data class AlertNotification(

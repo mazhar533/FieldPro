@@ -9,9 +9,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
@@ -34,13 +35,20 @@ import com.mazhar.fieldpro.ui.theme.*
 @Composable
 fun JobsScreen(
     jobs: List<ServiceRequest>,
+    initialTab: String = "Active",
+    isLoading: Boolean = false,
     onJobClick: (String) -> Unit
 ) {
-    var selectedTab by remember { mutableStateOf("Active") }
-    val tabs = listOf("Active", "Pending", "Completed")
+    var selectedTab by remember { mutableStateOf(initialTab) }
+
+    LaunchedEffect(initialTab) {
+        selectedTab = initialTab
+    }
+    val tabs = listOf("All", "Active", "Pending", "Completed")
 
     val filteredJobs = remember(jobs, selectedTab) {
         when (selectedTab) {
+            "All" -> jobs
             "Active" -> jobs.filter { it.status == JobStatus.ASSIGNED || it.status == JobStatus.IN_PROGRESS }
             "Pending" -> jobs.filter { it.status == JobStatus.PENDING }
             else -> jobs.filter { it.status == JobStatus.COMPLETED }
@@ -53,8 +61,6 @@ fun JobsScreen(
             .background(BackgroundLight)
             .padding(horizontal = 24.dp)
     ) {
-        Spacer(modifier = Modifier.height(24.dp))
-        
         Text(
             text = "Jobs",
             fontSize = 28.sp,
@@ -66,12 +72,12 @@ fun JobsScreen(
 
         // Custom Pill Tab Row
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             tabs.forEach { tab ->
                 val isSelected = tab == selectedTab
-                val backgroundColor = if (isSelected) BluePrimary else Color.Transparent
+                val backgroundColor = if (isSelected) YellowPrimary else Color.Transparent
                 val textColor = if (isSelected) Color.White else TextDark
                 val borderStroke = if (isSelected) null else BorderStroke(1.dp, CardBorder)
 
@@ -83,7 +89,7 @@ fun JobsScreen(
                         .then(
                             if (borderStroke != null) Modifier.background(CardBg) else Modifier
                         )
-                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -98,38 +104,44 @@ fun JobsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Animated Lists of jobs
-        AnimatedContent(
-            targetState = filteredJobs,
-            transitionSpec = {
-                fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) togetherWith
-                fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
-            },
-            label = "JobsListAnimation"
-        ) { targetJobs ->
-            if (targetJobs.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No jobs found in this section.",
-                        color = TextMuted,
-                        fontSize = 16.sp
-                    )
-                }
-            } else {
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    items(targetJobs, key = { it.id }) { job ->
-                        JobCard(job = job, onClick = { onJobClick(job.id) })
+        if (isLoading) {
+            JobsScreenShimmer()
+        } else {
+            // Animated Lists of jobs
+            AnimatedContent(
+                targetState = filteredJobs,
+                transitionSpec = {
+                    fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) togetherWith
+                    fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                },
+                label = "JobsListAnimation"
+            ) { targetJobs ->
+                if (targetJobs.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No jobs found in this section.",
+                            color = TextMuted,
+                            fontSize = 16.sp
+                        )
                     }
-                    item {
-                        Spacer(modifier = Modifier.height(24.dp))
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        itemsIndexed(targetJobs, key = { _, job -> job.id }) { index, job ->
+                            StaggeredSlideUpItem(index = index) {
+                                JobCard(job = job, onClick = { onJobClick(job.id) })
+                            }
+                        }
+                        item {
+                            Spacer(modifier = Modifier.height(24.dp))
+                        }
                     }
                 }
             }
@@ -153,9 +165,10 @@ fun JobCard(
     // Color code status badge
     val (badgeBg, badgeText, statusLabel) = when (job.status) {
         JobStatus.PENDING -> Triple(RedLightBg, RedPending, "PENDING")
-        JobStatus.ASSIGNED -> Triple(BlueLightBg, BlueText, "ASSIGNED")
+        JobStatus.ASSIGNED -> Triple(YellowLightBg, YellowText, "ASSIGNED")
         JobStatus.IN_PROGRESS -> Triple(PurpleLightBg, PurplePrimary, "IN PROGRESS")
         JobStatus.COMPLETED -> Triple(GreenLightBg, GreenCompleted, "COMPLETED")
+        JobStatus.REJECTED -> Triple(RedLightBg, RedPending, "REJECTED")
     }
 
     Card(
@@ -218,7 +231,7 @@ fun JobCard(
                 Icon(
                     imageVector = Icons.Default.LocationOn,
                     contentDescription = "Location",
-                    tint = BlueText,
+                    tint = YellowText,
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
@@ -267,3 +280,68 @@ fun JobCard(
         }
     }
 }
+
+@Composable
+private fun StaggeredSlideUpItem(
+    index: Int,
+    content: @Composable () -> Unit
+) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(index * 60L)
+        visible = true
+    }
+    AnimatedVisibility(
+        visible = visible,
+        enter = slideInVertically(
+            initialOffsetY = { 100 },
+            animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
+        ) + fadeIn(animationSpec = androidx.compose.animation.core.tween(300)),
+        exit = fadeOut()
+    ) {
+        content()
+    }
+}
+
+@Composable
+fun JobsScreenShimmer() {
+    val brush = shimmerBrush()
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        repeat(3) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = CardBg),
+                border = BorderStroke(1.dp, CardBorder)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(modifier = Modifier.size(width = 80.dp, height = 24.dp).clip(RoundedCornerShape(6.dp)).background(brush))
+                        Box(modifier = Modifier.size(width = 120.dp, height = 16.dp).clip(RoundedCornerShape(4.dp)).background(brush))
+                    }
+                    Box(modifier = Modifier.size(width = 200.dp, height = 20.dp).clip(RoundedCornerShape(4.dp)).background(brush))
+                    Box(modifier = Modifier.size(width = 150.dp, height = 14.dp).clip(RoundedCornerShape(4.dp)).background(brush))
+                    HorizontalDivider(color = CardBorder)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Box(modifier = Modifier.size(width = 100.dp, height = 14.dp).clip(RoundedCornerShape(4.dp)).background(brush))
+                        Box(modifier = Modifier.size(width = 120.dp, height = 14.dp).clip(RoundedCornerShape(4.dp)).background(brush))
+                    }
+                }
+            }
+        }
+    }
+}
+

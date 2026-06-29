@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mazhar.fieldpro.data.FieldProRepository
 import com.mazhar.fieldpro.data.User
+import com.mazhar.fieldpro.CustomToastManager
 import com.mazhar.fieldpro.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,13 +38,26 @@ fun ProfileScreen(
     repository: FieldProRepository,
     isDarkMode: Boolean,
     onDarkModeToggle: (Boolean) -> Unit,
-    onLogoutClick: () -> Unit
+    onLogoutClick: () -> Unit,
+    onProfileUpdated: (User) -> Unit
 ) {
     val context = LocalContext.current
     var showChangePasswordDialog by remember { mutableStateOf(false) }
     var newPassword by remember { mutableStateOf("") }
     var confirmNewPassword by remember { mutableStateOf("") }
     var isChangingPassword by remember { mutableStateOf(false) }
+
+    var showEditProfileDialog by remember { mutableStateOf(false) }
+    var editFullName by remember { mutableStateOf(user.fullName) }
+    var editContactNumber by remember { mutableStateOf(user.contactNumber) }
+    var editExpertise by remember { mutableStateOf(user.expertise) }
+    var isUpdatingProfile by remember { mutableStateOf(false) }
+
+    LaunchedEffect(user) {
+        editFullName = user.fullName
+        editContactNumber = user.contactNumber
+        editExpertise = user.expertise
+    }
 
     val scrollState = rememberScrollState()
     Column(
@@ -54,8 +68,6 @@ fun ProfileScreen(
             .padding(horizontal = 24.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        Spacer(modifier = Modifier.height(24.dp))
-
         Text(
             text = "Profile",
             fontSize = 28.sp,
@@ -65,10 +77,12 @@ fun ProfileScreen(
 
         // Profile Detail Banner
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showEditProfileDialog = true },
             shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = BlueLightBg),
-            border = BorderStroke(1.dp, BlueLightBg)
+            colors = CardDefaults.cardColors(containerColor = YellowLightBg),
+            border = BorderStroke(1.dp, YellowLightBg)
         ) {
             Column(
                 modifier = Modifier
@@ -105,7 +119,7 @@ fun ProfileScreen(
                         text = user.role,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = BlueText
+                        color = YellowText
                     )
                 }
 
@@ -123,6 +137,37 @@ fun ProfileScreen(
                         color = TextDarkColor
                     )
                 }
+
+                if (user.contactNumber.isNotEmpty() || user.expertise.isNotEmpty()) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (user.contactNumber.isNotEmpty()) {
+                            Text(
+                                text = "📞 ${user.contactNumber}",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextDarkColor
+                            )
+                        }
+                        if (user.expertise.isNotEmpty()) {
+                            Text(
+                                text = "🛠️ ${user.expertise}",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = YellowText
+                            )
+                        }
+                    }
+                }
+                
+                Text(
+                    text = "Tap card to edit your details",
+                    fontSize = 11.sp,
+                    color = YellowText.copy(alpha = 0.8f),
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
 
@@ -146,7 +191,7 @@ fun ProfileScreen(
                         title = "Account Preferences",
                         icon = Icons.Default.Settings,
                         onClick = {
-                            Toast.makeText(context, "Preferences screen is coming soon!", Toast.LENGTH_SHORT).show()
+                            CustomToastManager.showToast("Preferences screen is coming soon!")
                         }
                     )
                     
@@ -197,7 +242,7 @@ fun ProfileScreen(
                         Switch(
                             checked = isDarkMode,
                             onCheckedChange = onDarkModeToggle,
-                            colors = SwitchDefaults.colors(checkedThumbColor = BluePrimary)
+                            colors = SwitchDefaults.colors(checkedThumbColor = YellowPrimary)
                         )
                     }
                 }
@@ -266,7 +311,7 @@ fun ProfileScreen(
                             shape = RoundedCornerShape(10.dp),
                             enabled = !isChangingPassword,
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = BluePrimary,
+                                focusedBorderColor = YellowPrimary,
                                 unfocusedBorderColor = CardBorder
                             )
                         )
@@ -290,7 +335,7 @@ fun ProfileScreen(
                             shape = RoundedCornerShape(10.dp),
                             enabled = !isChangingPassword,
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = BluePrimary,
+                                focusedBorderColor = YellowPrimary,
                                 unfocusedBorderColor = CardBorder
                             )
                         )
@@ -301,9 +346,9 @@ fun ProfileScreen(
                 Button(
                     onClick = {
                         if (newPassword.length < 6) {
-                            Toast.makeText(context, "Password must be at least 6 characters.", Toast.LENGTH_SHORT).show()
+                            CustomToastManager.showToast("Password must be at least 6 characters.", isErrorToast = true)
                         } else if (newPassword != confirmNewPassword) {
-                            Toast.makeText(context, "Passwords do not match.", Toast.LENGTH_SHORT).show()
+                            CustomToastManager.showToast("Passwords do not match.", isErrorToast = true)
                         } else {
                             isChangingPassword = true
                             repository.updatePassword(
@@ -313,16 +358,16 @@ fun ProfileScreen(
                                     showChangePasswordDialog = false
                                     newPassword = ""
                                     confirmNewPassword = ""
-                                    Toast.makeText(context, "Password updated successfully!", Toast.LENGTH_LONG).show()
+                                    CustomToastManager.showToast("Password updated successfully!")
                                 },
                                 onFailure = { err ->
                                     isChangingPassword = false
-                                    Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                    CustomToastManager.showToast(err, isErrorToast = true)
                                 }
                             )
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = BluePrimary),
+                    colors = ButtonDefaults.buttonColors(containerColor = YellowPrimary),
                     enabled = !isChangingPassword
                 ) {
                     if (isChangingPassword) {
@@ -340,6 +385,143 @@ fun ProfileScreen(
                         confirmNewPassword = ""
                     },
                     enabled = !isChangingPassword
+                ) {
+                    Text("Cancel", color = TextDark)
+                }
+            },
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
+
+    // Edit Profile Dialog
+    if (showEditProfileDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!isUpdatingProfile) {
+                    showEditProfileDialog = false
+                }
+            },
+            title = { Text("Edit Profile Details", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.verticalScroll(rememberScrollState())
+                ) {
+                    Text("Modify your profile details below.", color = TextMuted)
+
+                    Column {
+                        Text(
+                            text = "Full Name",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextDark,
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                        OutlinedTextField(
+                            value = editFullName,
+                            onValueChange = { editFullName = it },
+                            placeholder = { Text("e.g. Alex Johnson") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            enabled = !isUpdatingProfile,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = YellowPrimary,
+                                unfocusedBorderColor = CardBorder
+                            )
+                        )
+                    }
+
+                    Column {
+                        Text(
+                            text = "Contact Number",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextDark,
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                        OutlinedTextField(
+                            value = editContactNumber,
+                            onValueChange = { editContactNumber = it },
+                            placeholder = { Text("e.g. +1 555-0199") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            enabled = !isUpdatingProfile,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = YellowPrimary,
+                                unfocusedBorderColor = CardBorder
+                            )
+                        )
+                    }
+
+                    Column {
+                        Text(
+                            text = "Expertise / Skills",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextDark,
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                        OutlinedTextField(
+                            value = editExpertise,
+                            onValueChange = { editExpertise = it },
+                            placeholder = { Text("e.g. HVAC / Electrical Repair") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            enabled = !isUpdatingProfile,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = YellowPrimary,
+                                unfocusedBorderColor = CardBorder
+                            )
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (editFullName.isBlank()) {
+                            CustomToastManager.showToast("Full Name cannot be empty.", isErrorToast = true)
+                        } else {
+                            isUpdatingProfile = true
+                            repository.updateUserProfile(
+                                fullName = editFullName.trim(),
+                                contactNumber = editContactNumber.trim(),
+                                expertise = editExpertise.trim(),
+                                onSuccess = { updatedUser ->
+                                    isUpdatingProfile = false
+                                    showEditProfileDialog = false
+                                    onProfileUpdated(updatedUser)
+                                    CustomToastManager.showToast("Profile updated successfully!")
+                                },
+                                onFailure = { err ->
+                                    isUpdatingProfile = false
+                                    CustomToastManager.showToast(err, isErrorToast = true)
+                                }
+                            )
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = YellowPrimary),
+                    enabled = !isUpdatingProfile
+                ) {
+                    if (isUpdatingProfile) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Save")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showEditProfileDialog = false
+                        editFullName = user.fullName
+                        editContactNumber = user.contactNumber
+                        editExpertise = user.expertise
+                    },
+                    enabled = !isUpdatingProfile
                 ) {
                     Text("Cancel", color = TextDark)
                 }

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -14,6 +15,7 @@ class FieldProRepository(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("fieldpro_prefs", Context.MODE_PRIVATE)
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
+    private var isFirstTechSync = true
 
     companion object {
         private const val KEY_USER = "user_data"
@@ -23,18 +25,7 @@ class FieldProRepository(context: Context) {
     }
 
     init {
-        // Initialize with mock data if run for the first time
-        if (!prefs.contains(KEY_USER)) {
-            val defaultUser = User(
-                fullName = "Alex Johnson",
-                email = "alex@fieldservice.com",
-                contactNumber = "+1 555-0199",
-                role = "TECHNICIAN"
-            )
-            saveUser(defaultUser)
-            saveJobs(getMockJobs())
-            saveNotifications(getMockNotifications())
-        }
+        // Start with a clean slate
     }
 
     // User Session
@@ -61,7 +52,8 @@ class FieldProRepository(context: Context) {
                             "fullName" to user.fullName,
                             "email" to user.email,
                             "contactNumber" to user.contactNumber,
-                            "role" to user.role
+                            "role" to user.role,
+                            "expertise" to user.expertise
                         )
                         firestore.collection("users").document(uid)
                             .set(userMap)
@@ -96,11 +88,12 @@ class FieldProRepository(context: Context) {
                             .addOnSuccessListener { document ->
                                 if (document != null && document.exists()) {
                                     val user = User(
-                                        fullName = document.getString("fullName") ?: "",
-                                        email = document.getString("email") ?: email,
-                                        contactNumber = document.getString("contactNumber") ?: "",
-                                        role = document.getString("role") ?: "TECHNICIAN"
-                                    )
+                                         fullName = document.getString("fullName") ?: "",
+                                         email = document.getString("email") ?: email,
+                                         contactNumber = document.getString("contactNumber") ?: "",
+                                         role = document.getString("role") ?: "TECHNICIAN",
+                                         expertise = document.getString("expertise") ?: ""
+                                     )
                                     saveUser(user)
                                     onSuccess(user)
                                 } else {
@@ -162,13 +155,14 @@ class FieldProRepository(context: Context) {
     }
 
     fun getUser(): User {
-        val userStr = prefs.getString(KEY_USER, null) ?: return User("Alex Johnson", "alex@fieldservice.com", "+1 555-0199", "TECHNICIAN")
+        val userStr = prefs.getString(KEY_USER, null) ?: return User("", "", "", "TECHNICIAN", "")
         val obj = JSONObject(userStr)
         return User(
-            fullName = obj.getString("fullName"),
-            email = obj.getString("email"),
-            contactNumber = obj.getString("contactNumber"),
-            role = obj.getString("role")
+            fullName = obj.optString("fullName", ""),
+            email = obj.optString("email", ""),
+            contactNumber = obj.optString("contactNumber", ""),
+            role = obj.optString("role", "TECHNICIAN"),
+            expertise = obj.optString("expertise", "")
         )
     }
 
@@ -178,6 +172,7 @@ class FieldProRepository(context: Context) {
         obj.put("email", user.email)
         obj.put("contactNumber", user.contactNumber)
         obj.put("role", user.role)
+        obj.put("expertise", user.expertise)
         prefs.edit().putString(KEY_USER, obj.toString()).apply()
     }
 
@@ -200,7 +195,14 @@ class FieldProRepository(context: Context) {
         prefs.edit().putString(KEY_JOBS, arr.toString()).apply()
     }
 
-    fun updateJobStatus(jobId: String, status: JobStatus, onSuccess: () -> Unit = {}, onFailure: (String) -> Unit = {}) {
+    fun updateJobStatus(
+        jobId: String, 
+        status: JobStatus, 
+        latitude: Double? = null,
+        longitude: Double? = null,
+        onSuccess: () -> Unit = {}, 
+        onFailure: (String) -> Unit = {}
+    ) {
         val jobs = getJobs().toMutableList()
         val index = jobs.indexOfFirst { it.id == jobId }
         var assignedTime: String? = null
@@ -215,15 +217,10 @@ class FieldProRepository(context: Context) {
             } else if (status == JobStatus.IN_PROGRESS) {
                 jobs[index].inProgressTimestamp = timeNow
                 inProgressTime = timeNow
+                jobs[index].startLatitude = latitude
+                jobs[index].startLongitude = longitude
             }
             saveJobs(jobs)
-            
-            // Generate notification for status update
-            addNotification(
-                title = "Job Status Updated",
-                description = "Job ${jobId} status is now ${status.name.replace("_", " ")}.",
-                icon = NotificationIcon.CLOCK
-            )
         }
 
         val updates = mutableMapOf<String, Any>(
@@ -233,6 +230,8 @@ class FieldProRepository(context: Context) {
             updates["assignedTimestamp"] = assignedTime
         } else if (status == JobStatus.IN_PROGRESS && inProgressTime != null) {
             updates["inProgressTimestamp"] = inProgressTime
+            if (latitude != null) updates["startLatitude"] = latitude
+            if (longitude != null) updates["startLongitude"] = longitude
         }
 
         firestore.collection("jobs").document(jobId)
@@ -246,6 +245,9 @@ class FieldProRepository(context: Context) {
         findings: String, 
         actionsTaken: String, 
         remarks: String,
+        evidenceImageBase64: String? = null,
+        latitude: Double? = null,
+        longitude: Double? = null,
         onSuccess: () -> Unit = {},
         onFailure: (String) -> Unit = {}
     ) {
@@ -260,23 +262,22 @@ class FieldProRepository(context: Context) {
             jobs[index].actionsTaken = actionsTaken
             jobs[index].completionRemarks = remarks
             jobs[index].reportTimestamp = currentTimestamp
+            jobs[index].evidenceImageBase64 = evidenceImageBase64
+            jobs[index].completionLatitude = latitude
+            jobs[index].completionLongitude = longitude
             saveJobs(jobs)
-            
-            // Add notification
-            addNotification(
-                title = "Service Report Submitted",
-                description = "Report for ${jobId} has been successfully saved.",
-                icon = NotificationIcon.BRIEFCASE
-            )
         }
 
-        val updates = mapOf(
+        val updates = mutableMapOf<String, Any>(
             "status" to JobStatus.COMPLETED.name,
             "findings" to findings,
             "actionsTaken" to actionsTaken,
             "completionRemarks" to remarks,
-            "reportTimestamp" to currentTimestamp
+            "reportTimestamp" to currentTimestamp,
+            "evidenceImageBase64" to (evidenceImageBase64 ?: "")
         )
+        if (latitude != null) updates["completionLatitude"] = latitude
+        if (longitude != null) updates["completionLongitude"] = longitude
 
         firestore.collection("jobs").document(jobId)
             .update(updates)
@@ -286,7 +287,9 @@ class FieldProRepository(context: Context) {
 
     // Notifications
     fun getNotifications(): List<AlertNotification> {
-        val notifStr = prefs.getString(KEY_NOTIFICATIONS, null) ?: return emptyList()
+        val email = auth.currentUser?.email ?: "guest"
+        val notifStr = prefs.getString("${KEY_NOTIFICATIONS}_$email", null)
+            ?: return getMockNotifications(email)
         val list = mutableListOf<AlertNotification>()
         val arr = JSONArray(notifStr)
         for (i in 0 until arr.length()) {
@@ -296,11 +299,12 @@ class FieldProRepository(context: Context) {
     }
 
     fun saveNotifications(notifications: List<AlertNotification>) {
+        val email = auth.currentUser?.email ?: "guest"
         val arr = JSONArray()
         for (notif in notifications) {
             arr.put(notificationToJSON(notif))
         }
-        prefs.edit().putString(KEY_NOTIFICATIONS, arr.toString()).apply()
+        prefs.edit().putString("${KEY_NOTIFICATIONS}_$email", arr.toString()).apply()
     }
 
     fun markNotificationAsRead(notifId: String) {
@@ -327,19 +331,32 @@ class FieldProRepository(context: Context) {
         saveNotifications(notifications)
     }
 
+    fun addAdminNotification(jobId: String, title: String, description: String, icon: NotificationIcon) {
+        val notifications = getNotifications().toMutableList()
+        // Remove any old notifications for this same job ID
+        notifications.removeAll { it.description.contains(jobId) }
+        
+        val sdf = SimpleDateFormat("MM/dd/yyyy, hh:mm:ss a", Locale.getDefault())
+        val newNotif = AlertNotification(
+            id = "NOTIF-${1000 + System.currentTimeMillis() % 100000}",
+            title = title,
+            description = description,
+            timestamp = sdf.format(Date()),
+            iconType = icon,
+            isRead = false
+        )
+        notifications.add(0, newNotif) // Add to top
+        saveNotifications(notifications)
+    }
+
     fun clearData() {
         auth.signOut()
-        prefs.edit().clear().apply()
-        // Re-initialize default session data but keep logged out
-        val defaultUser = User(
-            fullName = "Alex Johnson",
-            email = "alex@fieldservice.com",
-            contactNumber = "+1 555-0199",
-            role = "TECHNICIAN"
-        )
-        saveUser(defaultUser)
-        saveJobs(getMockJobs())
-        saveNotifications(getMockNotifications())
+        prefs.edit()
+            .remove(KEY_USER)
+            .remove(KEY_LOGGED_IN)
+            .remove(KEY_JOBS)
+            .apply()
+        isFirstTechSync = true
     }
 
     // Helpers JSON
@@ -362,6 +379,11 @@ class FieldProRepository(context: Context) {
         obj.put("createdTimestamp", req.createdTimestamp ?: JSONObject.NULL)
         obj.put("assignedTimestamp", req.assignedTimestamp ?: JSONObject.NULL)
         obj.put("inProgressTimestamp", req.inProgressTimestamp ?: JSONObject.NULL)
+        obj.put("evidenceImageBase64", req.evidenceImageBase64 ?: JSONObject.NULL)
+        obj.put("startLatitude", req.startLatitude ?: JSONObject.NULL)
+        obj.put("startLongitude", req.startLongitude ?: JSONObject.NULL)
+        obj.put("completionLatitude", req.completionLatitude ?: JSONObject.NULL)
+        obj.put("completionLongitude", req.completionLongitude ?: JSONObject.NULL)
         return obj
     }
 
@@ -383,7 +405,12 @@ class FieldProRepository(context: Context) {
             reportTimestamp = if (obj.isNull("reportTimestamp")) null else obj.getString("reportTimestamp"),
             createdTimestamp = if (obj.isNull("createdTimestamp")) null else obj.getString("createdTimestamp"),
             assignedTimestamp = if (obj.isNull("assignedTimestamp")) null else obj.getString("assignedTimestamp"),
-            inProgressTimestamp = if (obj.isNull("inProgressTimestamp")) null else obj.getString("inProgressTimestamp")
+            inProgressTimestamp = if (obj.isNull("inProgressTimestamp")) null else obj.getString("inProgressTimestamp"),
+            evidenceImageBase64 = if (obj.isNull("evidenceImageBase64")) null else obj.getString("evidenceImageBase64"),
+            startLatitude = if (obj.isNull("startLatitude")) null else obj.getDouble("startLatitude"),
+            startLongitude = if (obj.isNull("startLongitude")) null else obj.getDouble("startLongitude"),
+            completionLatitude = if (obj.isNull("completionLatitude")) null else obj.getDouble("completionLatitude"),
+            completionLongitude = if (obj.isNull("completionLongitude")) null else obj.getDouble("completionLongitude")
         )
     }
 
@@ -467,25 +494,8 @@ class FieldProRepository(context: Context) {
         )
     }
 
-    private fun getMockNotifications(): List<AlertNotification> {
-        return listOf(
-            AlertNotification(
-                id = "NOTIF-1",
-                title = "New Job Assigned",
-                description = "You have been assigned REQ-1003 for Acme Corp.",
-                timestamp = "6/23/2026, 8:16:21 AM",
-                iconType = NotificationIcon.BRIEFCASE,
-                isRead = false
-            ),
-            AlertNotification(
-                id = "NOTIF-2",
-                title = "Reminder: Upcoming Job",
-                description = "REQ-1001 starts in 2 hours.",
-                timestamp = "6/23/2026, 7:16:21 AM",
-                iconType = NotificationIcon.CLOCK,
-                isRead = true
-            )
-        )
+    private fun getMockNotifications(email: String): List<AlertNotification> {
+        return emptyList()
     }
 
     private fun serviceRequestToMap(req: ServiceRequest): Map<String, Any?> {
@@ -506,7 +516,12 @@ class FieldProRepository(context: Context) {
             "reportTimestamp" to req.reportTimestamp,
             "createdTimestamp" to req.createdTimestamp,
             "assignedTimestamp" to req.assignedTimestamp,
-            "inProgressTimestamp" to req.inProgressTimestamp
+            "inProgressTimestamp" to req.inProgressTimestamp,
+            "evidenceImageBase64" to req.evidenceImageBase64,
+            "startLatitude" to req.startLatitude,
+            "startLongitude" to req.startLongitude,
+            "completionLatitude" to req.completionLatitude,
+            "completionLongitude" to req.completionLongitude
         )
     }
 
@@ -528,7 +543,12 @@ class FieldProRepository(context: Context) {
             reportTimestamp = map["reportTimestamp"] as? String,
             createdTimestamp = map["createdTimestamp"] as? String,
             assignedTimestamp = map["assignedTimestamp"] as? String,
-            inProgressTimestamp = map["inProgressTimestamp"] as? String
+            inProgressTimestamp = map["inProgressTimestamp"] as? String,
+            evidenceImageBase64 = map["evidenceImageBase64"] as? String,
+            startLatitude = map["startLatitude"] as? Double ?: (map["startLatitude"] as? Long)?.toDouble(),
+            startLongitude = map["startLongitude"] as? Double ?: (map["startLongitude"] as? Long)?.toDouble(),
+            completionLatitude = map["completionLatitude"] as? Double ?: (map["completionLatitude"] as? Long)?.toDouble(),
+            completionLongitude = map["completionLongitude"] as? Double ?: (map["completionLongitude"] as? Long)?.toDouble()
         )
     }
 
@@ -542,35 +562,63 @@ class FieldProRepository(context: Context) {
             .addOnFailureListener { e -> onFailure(e.localizedMessage ?: "Failed to create job") }
     }
 
-    fun getJobsForTechnician(email: String, onSuccess: (List<ServiceRequest>) -> Unit, onFailure: (String) -> Unit) {
-        firestore.collection("jobs")
+    fun getJobsForTechnician(email: String, onSuccess: (List<ServiceRequest>) -> Unit, onFailure: (String) -> Unit): ListenerRegistration {
+        return firestore.collection("jobs")
             .whereEqualTo("assignedTechnician", email)
-            .get()
-            .addOnSuccessListener { result ->
-                val list = mutableListOf<ServiceRequest>()
-                for (doc in result) {
-                    list.add(mapToServiceRequest(doc.data))
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    onSuccess(getJobs())
+                    return@addSnapshotListener
                 }
-                saveJobs(list)
-                onSuccess(list)
-            }
-            .addOnFailureListener { e ->
-                onSuccess(getJobs())
+                if (snapshot != null) {
+                    val list = mutableListOf<ServiceRequest>()
+                    for (doc in snapshot) {
+                        list.add(mapToServiceRequest(doc.data))
+                    }
+                    
+                    val cachedJobs = getJobs()
+                    val notifications = getNotifications()
+                    val existingNotifJobIds = notifications
+                        .filter { it.title == "New Job Assigned" }
+                        .map { it.description.substringAfter("assigned ").substringBefore(" for") }
+                        .toSet()
+
+                    val newJobs = list.filter { job ->
+                        if (cachedJobs.isNotEmpty()) {
+                            job.id !in cachedJobs.map { it.id }.toSet()
+                        } else {
+                            job.status == JobStatus.PENDING && job.id !in existingNotifJobIds
+                        }
+                    }
+
+                    for (job in newJobs) {
+                        addNotification(
+                            title = "New Job Assigned",
+                            description = "You have been assigned ${job.id} for ${job.customerName}.",
+                            icon = NotificationIcon.BRIEFCASE
+                        )
+                    }
+                    
+                    saveJobs(list)
+                    onSuccess(list)
+                }
             }
     }
 
-    fun getAllJobsForAdmin(onSuccess: (List<ServiceRequest>) -> Unit, onFailure: (String) -> Unit) {
-        firestore.collection("jobs")
-            .get()
-            .addOnSuccessListener { result ->
-                val list = mutableListOf<ServiceRequest>()
-                for (doc in result) {
-                    list.add(mapToServiceRequest(doc.data))
+    fun getAllJobsForAdmin(onSuccess: (List<ServiceRequest>) -> Unit, onFailure: (String) -> Unit): ListenerRegistration {
+        return firestore.collection("jobs")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    onFailure(error.localizedMessage ?: "Failed to listen to jobs")
+                    return@addSnapshotListener
                 }
-                onSuccess(list)
-            }
-            .addOnFailureListener { e ->
-                onFailure(e.localizedMessage ?: "Failed to get jobs")
+                if (snapshot != null) {
+                    val list = mutableListOf<ServiceRequest>()
+                    for (doc in snapshot) {
+                        list.add(mapToServiceRequest(doc.data))
+                    }
+                    onSuccess(list)
+                }
             }
     }
 
@@ -585,7 +633,8 @@ class FieldProRepository(context: Context) {
                         fullName = doc.getString("fullName") ?: "",
                         email = doc.getString("email") ?: "",
                         contactNumber = doc.getString("contactNumber") ?: "",
-                        role = doc.getString("role") ?: "TECHNICIAN"
+                        role = doc.getString("role") ?: "TECHNICIAN",
+                        expertise = doc.getString("expertise") ?: ""
                     )
                     list.add(user)
                 }
@@ -593,6 +642,46 @@ class FieldProRepository(context: Context) {
             }
             .addOnFailureListener { e ->
                 onFailure(e.localizedMessage ?: "Failed to fetch technicians")
+            }
+    }
+
+    fun updateUserProfile(
+        fullName: String,
+        contactNumber: String,
+        expertise: String,
+        onSuccess: (User) -> Unit,
+        onFailure: (String) -> Unit
+    ) {
+        val currentUser = auth.currentUser
+        if (currentUser == null) {
+            onFailure("User not logged in")
+            return
+        }
+        val uid = currentUser.uid
+        val role = getUser().role
+        val email = getUser().email
+        
+        val updatedUser = User(
+            fullName = fullName,
+            email = email,
+            contactNumber = contactNumber,
+            role = role,
+            expertise = expertise
+        )
+        
+        val updates = mapOf(
+            "fullName" to fullName,
+            "contactNumber" to contactNumber,
+            "expertise" to expertise
+        )
+        
+        firestore.collection("users").document(uid).update(updates)
+            .addOnSuccessListener {
+                saveUser(updatedUser)
+                onSuccess(updatedUser)
+            }
+            .addOnFailureListener { e ->
+                onFailure(e.localizedMessage ?: "Failed to update profile on server")
             }
     }
 

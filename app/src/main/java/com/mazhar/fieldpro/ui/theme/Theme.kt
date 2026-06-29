@@ -13,23 +13,23 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
-    primary = BluePrimary,
+    primary = YellowPrimary,
     secondary = PurplePrimary,
     tertiary = GreenCompleted,
-    background = Color(0xFF0F172A),
-    surface = Color(0xFF1E293B),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onBackground = Color(0xFFF8FAFC),
-    onSurface = Color(0xFFF8FAFC),
-    outlineVariant = Color(0xFF334155)
+    background = Color(0xFF121200), // Dark gold tinted background
+    surface = Color(0xFF1C1B08), // Dark gold surface
+    onPrimary = Color.Black,
+    onSecondary = Color.Black,
+    onBackground = Color.White,
+    onSurface = Color.White,
+    outlineVariant = Color(0xFF3A3818)
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = BluePrimary,
-    onPrimary = Color.White,
+    primary = YellowPrimary,
+    onPrimary = Color.Black,
     secondary = PurplePrimary,
-    onSecondary = Color.White,
+    onSecondary = Color.Black,
     background = BackgroundLightColor,
     surface = Color.White,
     onBackground = TextDarkColor,

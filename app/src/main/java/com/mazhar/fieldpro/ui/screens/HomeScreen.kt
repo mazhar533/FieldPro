@@ -1,6 +1,5 @@
 package com.mazhar.fieldpro.ui.screens
 
-import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -22,10 +21,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextOverflow
 import com.mazhar.fieldpro.data.JobStatus
 import com.mazhar.fieldpro.data.ServiceRequest
 import com.mazhar.fieldpro.ui.theme.*
@@ -34,9 +33,15 @@ import com.mazhar.fieldpro.ui.theme.*
 fun HomeScreen(
     userName: String,
     jobs: List<ServiceRequest>,
-    onViewAllJobsClick: () -> Unit,
+    isLoading: Boolean = false,
+    onViewAllJobsClick: (String) -> Unit,
     onJobClick: (String) -> Unit
 ) {
+    if (isLoading) {
+        HomeScreenShimmer(userName)
+        return
+    }
+
     val activeCount = jobs.count { it.status == JobStatus.ASSIGNED || it.status == JobStatus.IN_PROGRESS }
     val completedCount = jobs.count { it.status == JobStatus.COMPLETED }
     val pendingCount = jobs.count { it.status == JobStatus.PENDING }
@@ -58,7 +63,7 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
         item {
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             // Greeting Header
             Text(
                 text = "Hello, $userName",
@@ -95,8 +100,8 @@ fun HomeScreen(
                         .fillMaxHeight()
                         .graphicsLayer(translationX = leftCardOffset.value)
                         .clip(RoundedCornerShape(24.dp))
-                        .background(BlueLightBg)
-                        .clickable { onViewAllJobsClick() }
+                        .background(YellowLightBg)
+                        .clickable { onViewAllJobsClick("Active") }
                         .padding(20.dp),
                     contentAlignment = Alignment.CenterStart
                 ) {
@@ -111,7 +116,7 @@ fun HomeScreen(
                             Icon(
                                 imageVector = Icons.Default.DateRange, // Clipboard icon placeholder
                                 contentDescription = "Active Jobs",
-                                tint = BluePrimary,
+                                tint = YellowPrimary,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -127,7 +132,7 @@ fun HomeScreen(
                                 text = "Active Jobs",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = BlueText
+                                color = YellowText
                             )
                         }
                     }
@@ -154,7 +159,7 @@ fun HomeScreen(
                         iconBgColor = GreenLightBg,
                         iconColor = GreenCompleted,
                         icon = Icons.Default.Check,
-                        onClick = onViewAllJobsClick
+                        onClick = { onViewAllJobsClick("Completed") }
                     )
 
                     // Pending Card
@@ -164,7 +169,7 @@ fun HomeScreen(
                         iconBgColor = RedLightBg,
                         iconColor = RedPending,
                         icon = Icons.Default.Info, // Clock representation
-                        onClick = onViewAllJobsClick
+                        onClick = { onViewAllJobsClick("Pending") }
                     )
                 }
             }
@@ -188,7 +193,7 @@ fun HomeScreen(
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
                         .background(PurpleLightBg)
-                        .clickable { onViewAllJobsClick() }
+                        .clickable { onViewAllJobsClick("All") }
                         .padding(horizontal = 14.dp, vertical = 8.dp)
                 ) {
                     Text(
@@ -237,14 +242,14 @@ fun HomeScreen(
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(BlueLightBg)
+                                    .background(YellowLightBg)
                                     .padding(horizontal = 12.dp, vertical = 6.dp)
                             ) {
                                 Text(
                                     text = upNextJob.id,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = BlueText
+                                    color = YellowText
                                 )
                             }
                             
@@ -338,19 +343,24 @@ fun StatsRowCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
                     text = "$count",
                     fontSize = 32.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextDark
                 )
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = label,
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = TextMuted
+                    color = TextMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             
@@ -367,6 +377,110 @@ fun StatsRowCard(
                     tint = iconColor,
                     modifier = Modifier.size(18.dp)
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun HomeScreenShimmer(userName: String) {
+    val brush = shimmerBrush()
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(BackgroundLight)
+            .padding(horizontal = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp)
+    ) {
+        item {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Hello, $userName",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextDark
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Here is your daily overview",
+                fontSize = 16.sp,
+                color = TextMuted
+            )
+        }
+        
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Left Active Card Shimmer
+                Box(
+                    modifier = Modifier
+                        .weight(1.1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(brush)
+                )
+                // Right Stats Cards Column Shimmer
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Box(modifier = Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(20.dp)).background(brush))
+                    Box(modifier = Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(20.dp)).background(brush))
+                }
+            }
+        }
+        
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Up Next",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextDark
+                )
+            }
+        }
+        
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = CardBg),
+                border = BorderStroke(1.dp, CardBorder)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(modifier = Modifier.size(width = 80.dp, height = 24.dp).clip(RoundedCornerShape(6.dp)).background(brush))
+                        Box(modifier = Modifier.size(width = 120.dp, height = 16.dp).clip(RoundedCornerShape(4.dp)).background(brush))
+                    }
+                    Box(modifier = Modifier.size(width = 200.dp, height = 20.dp).clip(RoundedCornerShape(4.dp)).background(brush))
+                    Box(modifier = Modifier.size(width = 150.dp, height = 14.dp).clip(RoundedCornerShape(4.dp)).background(brush))
+                    HorizontalDivider(color = CardBorder)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Box(modifier = Modifier.size(width = 100.dp, height = 14.dp).clip(RoundedCornerShape(4.dp)).background(brush))
+                        Box(modifier = Modifier.size(width = 120.dp, height = 14.dp).clip(RoundedCornerShape(4.dp)).background(brush))
+                    }
+                }
             }
         }
     }

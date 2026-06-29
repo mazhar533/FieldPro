@@ -23,11 +23,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.mazhar.fieldpro.CustomToastManager
 import androidx.compose.ui.unit.sp
 import com.mazhar.fieldpro.data.FieldProRepository
 import com.mazhar.fieldpro.data.User
@@ -40,6 +43,8 @@ fun LoginScreen(
     onLoginSuccess: (User) -> Unit
 ) {
     val context = LocalContext.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
 
     var isRegisterMode by remember { mutableStateOf(false) }
     var email by remember { mutableStateOf("") }
@@ -75,6 +80,7 @@ fun LoginScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(BackgroundLight)
+            .imePadding()
             .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -93,13 +99,13 @@ fun LoginScreen(
                 modifier = Modifier
                     .size(80.dp)
                     .clip(CircleShape)
-                    .background(BlueLightBg),
+                    .background(YellowLightBg),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Build,
                     contentDescription = "Logo",
-                    tint = BluePrimary,
+                    tint = YellowPrimary,
                     modifier = Modifier.size(36.dp)
                 )
             }
@@ -146,7 +152,7 @@ fun LoginScreen(
                         shape = RoundedCornerShape(14.dp),
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = BluePrimary,
+                            focusedBorderColor = YellowPrimary,
                             unfocusedBorderColor = CardBorder,
                             focusedContainerColor = Color.White,
                             unfocusedContainerColor = Color.White,
@@ -177,7 +183,7 @@ fun LoginScreen(
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = BluePrimary,
+                            focusedBorderColor = YellowPrimary,
                             unfocusedBorderColor = CardBorder,
                             focusedContainerColor = Color.White,
                             unfocusedContainerColor = Color.White,
@@ -207,7 +213,7 @@ fun LoginScreen(
                                 onClick = { role = r },
                                 label = { Text(r) },
                                 colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = BluePrimary,
+                                    selectedContainerColor = YellowPrimary,
                                     selectedLabelColor = Color.White,
                                     containerColor = CardBg,
                                     labelColor = TextDark
@@ -241,7 +247,7 @@ fun LoginScreen(
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = BluePrimary,
+                        focusedBorderColor = YellowPrimary,
                         unfocusedBorderColor = CardBorder,
                         focusedContainerColor = Color.White,
                         unfocusedContainerColor = Color.White,
@@ -275,7 +281,7 @@ fun LoginScreen(
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = BluePrimary,
+                        focusedBorderColor = YellowPrimary,
                         unfocusedBorderColor = CardBorder,
                         focusedContainerColor = Color.White,
                         unfocusedContainerColor = Color.White,
@@ -308,7 +314,7 @@ fun LoginScreen(
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = BluePrimary,
+                            focusedBorderColor = YellowPrimary,
                             unfocusedBorderColor = CardBorder,
                             focusedContainerColor = Color.White,
                             unfocusedContainerColor = Color.White,
@@ -355,6 +361,8 @@ fun LoginScreen(
                         } else if (password != confirmPassword) {
                             errorMessage = "Passwords do not match."
                         } else {
+                            keyboardController?.hide()
+                            focusManager.clearFocus()
                             isLoading = true
                             errorMessage = ""
                             val newUser = User(fullName, email, contactNumber, role)
@@ -366,7 +374,7 @@ fun LoginScreen(
                                     isRegisterMode = false
                                     password = ""
                                     confirmPassword = ""
-                                    Toast.makeText(context, "Registration successful! Please login.", Toast.LENGTH_LONG).show()
+                                    CustomToastManager.showToast("Registration successful! Please login.")
                                 },
                                 onFailure = { err ->
                                     isLoading = false
@@ -380,6 +388,8 @@ fun LoginScreen(
                         } else if (password.isEmpty()) {
                             errorMessage = "Please enter your password."
                         } else {
+                            keyboardController?.hide()
+                            focusManager.clearFocus()
                             isLoading = true
                             errorMessage = ""
                             repository.authenticateUser(
@@ -403,7 +413,7 @@ fun LoginScreen(
                     .graphicsLayer(scaleX = scale, scaleY = scale),
                 shape = RoundedCornerShape(28.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = BluePrimary,
+                    containerColor = YellowPrimary,
                     contentColor = Color.White
                 ),
                 enabled = !isLoading,
@@ -431,7 +441,7 @@ fun LoginScreen(
                 text = if (isRegisterMode) "Already have an account? Sign In" else "Don't have an account? Sign Up",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = BlueText,
+                color = YellowText,
                 modifier = Modifier
                     .clickable { 
                         if (!isLoading) {
@@ -477,7 +487,7 @@ fun LoginScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = BluePrimary,
+                            focusedBorderColor = YellowPrimary,
                             unfocusedBorderColor = CardBorder
                         )
                     )
@@ -492,17 +502,17 @@ fun LoginScreen(
                                 onSuccess = {
                                     showForgotPasswordDialog = false
                                     resetEmail = ""
-                                    Toast.makeText(context, "Password reset email sent!", Toast.LENGTH_LONG).show()
+                                    CustomToastManager.showToast("Password reset email sent!")
                                 },
                                 onFailure = { err ->
-                                    Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                    CustomToastManager.showToast(err, isErrorToast = true)
                                 }
                             )
                         } else {
-                            Toast.makeText(context, "Please enter a valid email address.", Toast.LENGTH_SHORT).show()
+                            CustomToastManager.showToast("Please enter a valid email address.", isErrorToast = true)
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = BluePrimary)
+                    colors = ButtonDefaults.buttonColors(containerColor = YellowPrimary)
                 ) {
                     Text("Send")
                 }

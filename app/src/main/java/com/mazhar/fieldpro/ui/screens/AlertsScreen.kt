@@ -10,17 +10,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,8 +41,6 @@ fun AlertsScreen(
             .background(BackgroundLight)
             .padding(horizontal = 24.dp)
     ) {
-        Spacer(modifier = Modifier.height(24.dp))
-
         Text(
             text = "Alerts",
             fontSize = 28.sp,
@@ -71,17 +66,44 @@ fun AlertsScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                items(notifications, key = { it.id }) { notif ->
-                    NotificationCard(
-                        notification = notif,
-                        onClick = { onNotificationClick(notif.id) }
-                    )
+                itemsIndexed(notifications, key = { _, notif -> notif.id }) { index, notif ->
+                    StaggeredSlideRightItem(index = index) {
+                        NotificationCard(
+                            notification = notif,
+                            onClick = { onNotificationClick(notif.id) }
+                        )
+                    }
                 }
                 item {
                     Spacer(modifier = Modifier.height(24.dp))
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun StaggeredSlideRightItem(
+    index: Int,
+    content: @Composable () -> Unit
+) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val delayTime = if (index < 5) index * 60L else 0L
+        if (delayTime > 0L) {
+            kotlinx.coroutines.delay(delayTime)
+        }
+        visible = true
+    }
+    AnimatedVisibility(
+        visible = visible,
+        enter = slideInHorizontally(
+            initialOffsetX = { 200 },
+            animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
+        ) + fadeIn(animationSpec = androidx.compose.animation.core.tween(300)),
+        exit = fadeOut()
+    ) {
+        content()
     }
 }
 
@@ -100,11 +122,11 @@ fun NotificationCard(
 
     // Icons configurations
     val (iconBg, iconColor, iconVector) = when (notification.iconType) {
-        NotificationIcon.BRIEFCASE -> Triple(BlueLightBg, BluePrimary, Icons.Default.DateRange)
+        NotificationIcon.BRIEFCASE -> Triple(YellowLightBg, YellowPrimary, Icons.Default.DateRange)
         NotificationIcon.CLOCK -> Triple(Color(0xFFE2E8F0), TextMuted, Icons.Default.Info)
     }
 
-    val cardBorderColor = if (!notification.isRead) BluePrimary.copy(alpha = 0.5f) else CardBorder
+    val cardBorderColor = if (!notification.isRead) YellowPrimary.copy(alpha = 0.5f) else CardBorder
 
     Card(
         modifier = Modifier
@@ -170,7 +192,7 @@ fun NotificationCard(
                     modifier = Modifier
                         .size(10.dp)
                         .clip(CircleShape)
-                        .background(BluePrimary)
+                        .background(YellowPrimary)
                         .align(Alignment.CenterVertically)
                 )
             }

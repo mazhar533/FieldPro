@@ -1,8 +1,5 @@
 package com.mazhar.fieldpro.ui.screens
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -15,19 +12,23 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import android.graphics.BitmapFactory
+import android.util.Base64
 import com.mazhar.fieldpro.data.JobStatus
 import com.mazhar.fieldpro.data.ServiceRequest
 import com.mazhar.fieldpro.ui.theme.*
@@ -58,9 +59,10 @@ fun JobDetailsScreen(
     // Color code status badge
     val (badgeBg, badgeText, statusLabel) = when (job.status) {
         JobStatus.PENDING -> Triple(RedLightBg, RedPending, "PENDING")
-        JobStatus.ASSIGNED -> Triple(BlueLightBg, BlueText, "ASSIGNED")
+        JobStatus.ASSIGNED -> Triple(YellowLightBg, YellowText, "ASSIGNED")
         JobStatus.IN_PROGRESS -> Triple(PurpleLightBg, PurplePrimary, "IN PROGRESS")
         JobStatus.COMPLETED -> Triple(GreenLightBg, GreenCompleted, "COMPLETED")
+        JobStatus.REJECTED -> Triple(RedLightBg, RedPending, "REJECTED")
     }
 
     Scaffold(
@@ -100,8 +102,8 @@ fun JobDetailsScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = BlueLightBg),
-                border = BorderStroke(1.dp, BlueLightBg)
+                colors = CardDefaults.cardColors(containerColor = YellowLightBg),
+                border = BorderStroke(1.dp, YellowLightBg)
             ) {
                 Column(
                     modifier = Modifier.padding(20.dp),
@@ -116,7 +118,7 @@ fun JobDetailsScreen(
                             text = job.id,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
-                            color = BlueText
+                            color = YellowText
                         )
                         
                         Box(
@@ -254,14 +256,14 @@ fun JobDetailsScreen(
                             modifier = Modifier
                                 .size(48.dp)
                                 .clip(CircleShape)
-                                .background(BlueLightBg)
+                                .background(YellowLightBg)
                                 .clickable { onMapClick(job.location) },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.LocationOn,
                                 contentDescription = "Locate on Map",
-                                tint = BluePrimary,
+                                tint = YellowPrimary,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -337,6 +339,97 @@ fun JobDetailsScreen(
                                 color = TextMuted,
                                 fontWeight = FontWeight.SemiBold
                             )
+                        }
+
+                        if (!job.evidenceImageBase64.isNullOrEmpty()) {
+                            HorizontalDivider(color = CardBorder, modifier = Modifier.padding(vertical = 4.dp))
+                            Text("SERVICE EVIDENCE PHOTO", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextMuted)
+                            val bitmap = remember(job.evidenceImageBase64) {
+                                try {
+                                    val decodedString = Base64.decode(job.evidenceImageBase64, Base64.DEFAULT)
+                                    BitmapFactory.decodeByteArray(decodedString, 0, decodedString.size)
+                                } catch (e: Exception) {
+                                    null
+                                }
+                            }
+                            if (bitmap != null) {
+                                Image(
+                                    bitmap = bitmap.asImageBitmap(),
+                                    contentDescription = "Evidence Photo",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(200.dp)
+                                        .clip(RoundedCornerShape(16.dp)),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // GPS Location Tracking Card
+            if (job.startLatitude != null || job.completionLatitude != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = CardBg),
+                    border = BorderStroke(1.dp, CardBorder)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "GPS Verification",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextDark
+                        )
+                        
+                        if (job.startLatitude != null && job.startLongitude != null) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                    Text("WORK STARTED LOCATION", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextMuted)
+                                    Text("Lat: ${job.startLatitude}, Lng: ${job.startLongitude}", fontSize = 14.sp, color = TextDark)
+                                }
+                                Button(
+                                    onClick = { onMapClick("${job.startLatitude},${job.startLongitude}") },
+                                    colors = ButtonDefaults.buttonColors(containerColor = YellowLightBg, contentColor = YellowPrimary),
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Text("Map View", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                        
+                        if (job.completionLatitude != null && job.completionLongitude != null) {
+                            if (job.startLatitude != null) {
+                                HorizontalDivider(color = CardBorder, modifier = Modifier.padding(vertical = 4.dp))
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                    Text("WORK COMPLETED LOCATION", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextMuted)
+                                    Text("Lat: ${job.completionLatitude}, Lng: ${job.completionLongitude}", fontSize = 14.sp, color = TextDark)
+                                }
+                                Button(
+                                    onClick = { onMapClick("${job.completionLatitude},${job.completionLongitude}") },
+                                    colors = ButtonDefaults.buttonColors(containerColor = YellowLightBg, contentColor = YellowPrimary),
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Text("Map View", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
                         }
                     }
                 }
@@ -437,7 +530,7 @@ fun JobDetailsScreen(
                                     .weight(1f)
                                     .height(52.dp),
                                 shape = RoundedCornerShape(26.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = BluePrimary)
+                                colors = ButtonDefaults.buttonColors(containerColor = YellowPrimary)
                             ) {
                                 Text("Accept Job", fontWeight = FontWeight.Bold)
                             }
@@ -475,7 +568,7 @@ fun JobDetailsScreen(
                                 .fillMaxWidth()
                                 .height(52.dp),
                             shape = RoundedCornerShape(26.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = BlueLightBg, contentColor = BlueText)
+                            colors = ButtonDefaults.buttonColors(containerColor = YellowLightBg, contentColor = YellowText)
                         ) {
                             Icon(imageVector = Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
@@ -523,6 +616,34 @@ fun JobDetailsScreen(
                             }
                         }
                     }
+                    JobStatus.REJECTED -> {
+                        // Rejected notice
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = RedLightBg)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Rejected",
+                                    tint = RedPending
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Job was rejected by technician",
+                                    fontWeight = FontWeight.Bold,
+                                    color = RedPending
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -537,8 +658,8 @@ fun TimelineItem(
     isCompleted: Boolean,
     isLast: Boolean
 ) {
-    val lineCol = if (isCompleted) BluePrimary else CardBorder
-    val dotCol = if (isCompleted) BluePrimary else CardBorder
+    val lineCol = if (isCompleted) YellowPrimary else CardBorder
+    val dotCol = if (isCompleted) YellowPrimary else CardBorder
 
     Row(
         modifier = Modifier.fillMaxWidth(),
