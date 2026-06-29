@@ -562,6 +562,13 @@ class FieldProRepository(context: Context) {
             .addOnFailureListener { e -> onFailure(e.localizedMessage ?: "Failed to create job") }
     }
 
+    fun updateJob(job: ServiceRequest, onSuccess: () -> Unit, onFailure: (String) -> Unit) {
+        firestore.collection("jobs").document(job.id)
+            .set(serviceRequestToMap(job))
+            .addOnSuccessListener { onSuccess() }
+            .addOnFailureListener { e -> onFailure(e.localizedMessage ?: "Failed to update job") }
+    }
+
     fun getJobsForTechnician(email: String, onSuccess: (List<ServiceRequest>) -> Unit, onFailure: (String) -> Unit): ListenerRegistration {
         return firestore.collection("jobs")
             .whereEqualTo("assignedTechnician", email)

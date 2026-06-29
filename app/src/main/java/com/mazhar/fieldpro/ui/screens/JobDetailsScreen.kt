@@ -26,9 +26,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import android.graphics.BitmapFactory
 import android.util.Base64
+import com.mazhar.fieldpro.CustomToastManager
 import com.mazhar.fieldpro.data.JobStatus
 import com.mazhar.fieldpro.data.ServiceRequest
 import com.mazhar.fieldpro.ui.theme.*
@@ -45,7 +47,8 @@ fun JobDetailsScreen(
     onRejectClick: (String) -> Unit,
     onStartWorkClick: (String) -> Unit,
     onCreateReportClick: (String) -> Unit,
-    onMarkCompletedClick: (String) -> Unit
+    onMarkCompletedClick: (String) -> Unit,
+    onHistoryJobClick: (String) -> Unit
 ) {
     val job = jobs.firstOrNull { it.id == jobId }
 
@@ -54,6 +57,10 @@ fun JobDetailsScreen(
             Text("Job details not found.", color = TextMuted)
         }
         return
+    }
+
+    val customerHistory = remember(jobs, job.contactNumber, job.id) {
+        jobs.filter { it.contactNumber == job.contactNumber && it.id != job.id }
     }
 
     // Color code status badge
@@ -266,6 +273,84 @@ fun JobDetailsScreen(
                                 tint = YellowPrimary,
                                 modifier = Modifier.size(20.dp)
                             )
+                        }
+                    }
+                }
+            }
+            
+            // Customer Service History Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = CardBg),
+                border = BorderStroke(1.dp, CardBorder)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Customer Service History",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextDark
+                    )
+                    
+                    if (customerHistory.isEmpty()) {
+                        Text(
+                            text = "No previous service history found for this contact.",
+                            fontSize = 14.sp,
+                            color = TextMuted
+                        )
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            customerHistory.forEach { historyJob ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(BackgroundLight, RoundedCornerShape(12.dp))
+                                        .clickable { onHistoryJobClick(historyJob.id) }
+                                        .padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = historyJob.serviceType,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp,
+                                            color = TextDark
+                                        )
+                                        Text(
+                                            text = "${historyJob.id} | ${historyJob.serviceDate}",
+                                            fontSize = 11.sp,
+                                            color = TextMuted
+                                        )
+                                    }
+                                    
+                                    val (histBadgeBg, histBadgeText) = when (historyJob.status) {
+                                        JobStatus.PENDING -> Pair(RedLightBg, RedPending)
+                                        JobStatus.ASSIGNED -> Pair(YellowLightBg, YellowText)
+                                        JobStatus.IN_PROGRESS -> Pair(PurpleLightBg, PurplePrimary)
+                                        JobStatus.COMPLETED -> Pair(GreenLightBg, GreenCompleted)
+                                        JobStatus.REJECTED -> Pair(RedLightBg, RedPending)
+                                    }
+                                    
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(histBadgeBg)
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = historyJob.status.name,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = histBadgeText
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -576,12 +661,20 @@ fun JobDetailsScreen(
                         }
 
                         Button(
-                            onClick = { onMarkCompletedClick(job.id) },
+                            onClick = {
+                                if (job.findings.isNullOrEmpty() || job.reportTimestamp.isNullOrEmpty()) {
+                                    CustomToastManager.showToast("Please submit the service report first before marking the job as completed.", isErrorToast = true)
+                                } else {
+                                    onMarkCompletedClick(job.id)
+                                }
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(52.dp),
                             shape = RoundedCornerShape(26.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = GreenCompleted)
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (job.findings.isNullOrEmpty() || job.reportTimestamp.isNullOrEmpty()) Color.Gray else GreenCompleted
+                            )
                         ) {
                             Icon(imageVector = Icons.Default.Check, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))

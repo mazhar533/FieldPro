@@ -69,6 +69,7 @@ import com.mazhar.fieldpro.ui.theme.CardBg
 import com.mazhar.fieldpro.ui.theme.YellowText
 
 enum class AppScreen {
+    SPLASH,
     LOGIN,
     MAIN,
     JOB_DETAILS,
@@ -121,10 +122,23 @@ class MainActivity : ComponentActivity() {
                 Box(modifier = Modifier.fillMaxSize()) {
                     val coroutineScope = rememberCoroutineScope()
                     var isLoggedIn by remember { mutableStateOf(repository.isUserLoggedIn()) }
-                    var currentScreen by remember { mutableStateOf(if (isLoggedIn) AppScreen.MAIN else AppScreen.LOGIN) }
+                    var currentScreen by remember { mutableStateOf(AppScreen.SPLASH) }
                     var selectedTab by remember { mutableStateOf("Home") }
                     var selectedJobId by remember { mutableStateOf("") }
                     var currentUser by remember { mutableStateOf(repository.getUser()) }
+
+                    LaunchedEffect(currentScreen, isDarkMode) {
+                        val window = this@MainActivity.window
+                        val view = window.decorView
+                        if (currentScreen == AppScreen.SPLASH) {
+                            window.statusBarColor = android.graphics.Color.parseColor("#FFD54F")
+                            androidx.core.view.WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = true
+                        } else {
+                            val bgHex = if (isDarkMode) "#121212" else "#FAFAFA"
+                            window.statusBarColor = android.graphics.Color.parseColor(bgHex)
+                            androidx.core.view.WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !isDarkMode
+                        }
+                    }
 
                     LaunchedEffect(intentJobId.value, currentUser) {
                         val jobId = intentJobId.value
@@ -139,7 +153,7 @@ class MainActivity : ComponentActivity() {
                     var showBars by remember { mutableStateOf(isLoggedIn && currentScreen == AppScreen.MAIN) }
 
                     // Live list states
-                    var jobsList by remember { mutableStateOf(repository.getJobs().sortedByDescending { it.id.substringAfter("REQ-").toIntOrNull() ?: 0 }) }
+                    var jobsList by remember { mutableStateOf(repository.getJobs().sortedByDescending { parseCreatedTimestamp(it.createdTimestamp) }) }
                     var previousJobsCount by remember { mutableStateOf(-1) }
                     var notificationsList by remember { mutableStateOf(repository.getNotifications()) }
 
@@ -189,7 +203,7 @@ class MainActivity : ComponentActivity() {
                         repository.getJobsForTechnician(
                             email = currentUser.email,
                             onSuccess = { list -> 
-                                jobsList = list.sortedByDescending { it.id.substringAfter("REQ-").toIntOrNull() ?: 0 }
+                                jobsList = list.sortedByDescending { parseCreatedTimestamp(it.createdTimestamp) }
                                 notificationsList = repository.getNotifications()
                                 isTechLoading = false
                             },
@@ -198,7 +212,7 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     } else {
-                        jobsList = repository.getJobs().sortedByDescending { it.id.substringAfter("REQ-").toIntOrNull() ?: 0 }
+                        jobsList = repository.getJobs().sortedByDescending { parseCreatedTimestamp(it.createdTimestamp) }
                         notificationsList = repository.getNotifications()
                     }
                 }
@@ -211,7 +225,7 @@ class MainActivity : ComponentActivity() {
                         listenerReg = repository.getJobsForTechnician(
                             email = currentUser.email,
                             onSuccess = { list -> 
-                                jobsList = list.sortedByDescending { it.id.substringAfter("REQ-").toIntOrNull() ?: 0 }
+                                jobsList = list.sortedByDescending { parseCreatedTimestamp(it.createdTimestamp) }
                                 notificationsList = repository.getNotifications()
                                 isTechLoading = false
                             },
@@ -247,6 +261,35 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         previousNotifCount = notificationsList.size
+                    }
+                }
+
+                var hasShownTodayReminder by remember { mutableStateOf(false) }
+                LaunchedEffect(isLoggedIn) {
+                    if (!isLoggedIn) {
+                        hasShownTodayReminder = false
+                    }
+                }
+                LaunchedEffect(jobsList, isLoggedIn, currentUser) {
+                    if (isLoggedIn && currentUser.role == "TECHNICIAN" && !hasShownTodayReminder && jobsList.isNotEmpty()) {
+                        val sdf1 = java.text.SimpleDateFormat("M/d/yyyy", java.util.Locale.getDefault())
+                        val sdf2 = java.text.SimpleDateFormat("MM/dd/yyyy", java.util.Locale.getDefault())
+                        val today1 = sdf1.format(java.util.Date())
+                        val today2 = sdf2.format(java.util.Date())
+                        
+                        val todayJobs = jobsList.filter { 
+                            (it.status == JobStatus.ASSIGNED || it.status == JobStatus.IN_PROGRESS) && 
+                            (it.serviceDate == today1 || it.serviceDate == today2)
+                        }
+                        
+                        if (todayJobs.isNotEmpty()) {
+                            hasShownTodayReminder = true
+                            val jobIds = todayJobs.joinToString { it.id }
+                            this@MainActivity.showSystemNotification(
+                                title = "⏰ Daily Work Reminder",
+                                message = "You have ${todayJobs.size} active jobs scheduled for today (${jobIds}). Tap to view details."
+                            )
+                        }
                     }
                 }
 
@@ -335,6 +378,28 @@ class MainActivity : ComponentActivity() {
                             label = "ScreenTransitions"
                         ) { targetScreen ->
                             when (targetScreen) {
+                                AppScreen.SPLASH -> {
+                                    SplashScreen(
+                                        onSplashFinished = {
+                                            if (isLoggedIn) {
+                                                val jobId = intentJobId.value
+                                                if (jobId != null && jobId.isNotEmpty() && currentUser.role == "TECHNICIAN") {
+                                                    selectedJobId = jobId
+                                                    currentScreen = AppScreen.JOB_DETAILS
+                                                    intentJobId.value = null
+                                                } else {
+                                                    currentScreen = AppScreen.MAIN
+                                                    coroutineScope.launch {
+                                                        delay(450)
+                                                        showBars = true
+                                                    }
+                                                }
+                                            } else {
+                                                currentScreen = AppScreen.LOGIN
+                                            }
+                                        }
+                                    )
+                                }
                                 AppScreen.LOGIN -> {
                                     LoginScreen(
                                         repository = repository,
@@ -514,6 +579,9 @@ class MainActivity : ComponentActivity() {
                                             repository.updateJobStatus(jobId, JobStatus.COMPLETED)
                                             refreshData()
                                             CustomToastManager.showToast("Job Marked as Completed")
+                                        },
+                                        onHistoryJobClick = { historyJobId ->
+                                            selectedJobId = historyJobId
                                         }
                                     )
                                 }
@@ -625,6 +693,16 @@ fun extractJobId(description: String): String? {
         return description.substringAfter("(").substringBefore(")").trim()
     }
     return null
+}
+
+fun parseCreatedTimestamp(timestampStr: String?): Long {
+    if (timestampStr.isNullOrEmpty()) return 0L
+    return try {
+        val sdf = java.text.SimpleDateFormat("MM/dd/yyyy, hh:mm:ss a", java.util.Locale.getDefault())
+        sdf.parse(timestampStr)?.time ?: 0L
+    } catch (e: Exception) {
+        0L
+    }
 }
 
 @Composable

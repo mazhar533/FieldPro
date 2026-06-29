@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mazhar.fieldpro.CustomToastManager
 import com.mazhar.fieldpro.extractJobId
+import com.mazhar.fieldpro.parseCreatedTimestamp
 import com.mazhar.fieldpro.data.*
 import androidx.compose.animation.core.*
 import androidx.compose.ui.geometry.Offset
@@ -64,6 +65,7 @@ data class AdminTabItem(val title: String, val icon: AdminIcon)
 sealed class AdminBottomSheetContent {
     data class TechJobs(val tech: User, val jobs: List<ServiceRequest>) : AdminBottomSheetContent()
     data class JobDetails(val job: ServiceRequest, val showBackButton: Boolean) : AdminBottomSheetContent()
+    data class EditJob(val job: ServiceRequest) : AdminBottomSheetContent()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -135,7 +137,7 @@ fun AdminDashboardScreen(
                     }
                 }
                 previousStatuses = jobs.associate { it.id to it.status }
-                allJobs = jobs.sortedByDescending { it.id.substringAfter("REQ-").toIntOrNull() ?: 0 }
+                allJobs = jobs.sortedByDescending { parseCreatedTimestamp(it.createdTimestamp) }
                 jobsLoaded = true
                 if (techsLoaded) {
                     isLoading = false
@@ -282,6 +284,7 @@ fun AdminDashboardScreen(
                 is AdminBottomSheetContent.JobDetails -> {
                     BottomSheetJobDetailsContent(
                         job = content.job,
+                        allJobs = allJobs,
                         technicians = technicians,
                         showBackButton = content.showBackButton,
                         onBackClick = {
@@ -297,7 +300,33 @@ fun AdminDashboardScreen(
                                 activeBottomSheetContent = null
                             }
                         },
-                        onClose = { activeBottomSheetContent = null }
+                        onClose = { activeBottomSheetContent = null },
+                        onEditClick = {
+                            activeBottomSheetContent = AdminBottomSheetContent.EditJob(content.job)
+                        },
+                        onHistoryJobClick = { historyJob ->
+                            activeBottomSheetContent = AdminBottomSheetContent.JobDetails(historyJob, showBackButton = true)
+                        }
+                    )
+                }
+                is AdminBottomSheetContent.EditJob -> {
+                    BottomSheetEditJobContent(
+                        job = content.job,
+                        technicians = technicians,
+                        onSave = { updatedJob ->
+                            repository.updateJob(updatedJob,
+                                onSuccess = {
+                                    CustomToastManager.showToast("Job updated successfully!")
+                                    activeBottomSheetContent = null
+                                },
+                                onFailure = { err ->
+                                    CustomToastManager.showToast(err, isErrorToast = true)
+                                }
+                            )
+                        },
+                        onClose = {
+                            activeBottomSheetContent = AdminBottomSheetContent.JobDetails(content.job, showBackButton = false)
+                        }
                     )
                 }
                 null -> {}
@@ -1374,12 +1403,18 @@ fun BottomSheetTechJobsContent(
 @Composable
 fun BottomSheetJobDetailsContent(
     job: ServiceRequest,
+    allJobs: List<ServiceRequest>,
     technicians: List<User>,
     showBackButton: Boolean,
     onBackClick: () -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    onEditClick: () -> Unit,
+    onHistoryJobClick: (ServiceRequest) -> Unit
 ) {
     val localContext = LocalContext.current
+    val customerHistory = remember(allJobs, job.contactNumber, job.id) {
+        allJobs.filter { it.contactNumber == job.contactNumber && it.id != job.id }
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1441,6 +1476,70 @@ fun BottomSheetJobDetailsContent(
                 "$name (${job.assignedTechnician})"
             }
             DetailRow(label = "Assigned To", value = techDisplay)
+
+            HorizontalDivider(color = CardBorder, modifier = Modifier.padding(vertical = 4.dp))
+            Text(text = "Customer Service History", fontWeight = FontWeight.Bold, color = TextDark)
+            if (customerHistory.isEmpty()) {
+                Text(
+                    text = "No previous service history found for this contact.",
+                    fontSize = 13.sp,
+                    color = TextMuted,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+            } else {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(bottom = 4.dp)
+                ) {
+                    customerHistory.forEach { historyJob ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(BackgroundLight, RoundedCornerShape(12.dp))
+                                .clickable { onHistoryJobClick(historyJob) }
+                                .padding(10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = historyJob.serviceType,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = TextDark
+                                )
+                                Text(
+                                    text = "${historyJob.id} | ${historyJob.serviceDate}",
+                                    fontSize = 10.sp,
+                                    color = TextMuted
+                                )
+                            }
+                            
+                            val (histBadgeBg, histBadgeText) = when (historyJob.status) {
+                                JobStatus.PENDING -> Pair(RedLightBg, RedPending)
+                                JobStatus.ASSIGNED -> Pair(YellowLightBg, YellowText)
+                                JobStatus.IN_PROGRESS -> Pair(PurpleLightBg, PurplePrimary)
+                                JobStatus.COMPLETED -> Pair(GreenLightBg, GreenCompleted)
+                                JobStatus.REJECTED -> Pair(RedLightBg, RedPending)
+                            }
+                            
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(histBadgeBg)
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = historyJob.status.name,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = histBadgeText
+                                )
+                            }
+                        }
+                    }
+                }
+            }
             
             if (job.status == JobStatus.COMPLETED) {
                 HorizontalDivider(color = CardBorder, modifier = Modifier.padding(vertical = 4.dp))
@@ -1529,6 +1628,315 @@ fun BottomSheetJobDetailsContent(
                     }
                 }
             }
+        }
+
+        if (job.status == JobStatus.PENDING) {
+            Button(
+                onClick = onEditClick,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = YellowPrimary, contentColor = Color.White),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Edit Job Details", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BottomSheetEditJobContent(
+    job: ServiceRequest,
+    technicians: List<User>,
+    onSave: (ServiceRequest) -> Unit,
+    onClose: () -> Unit
+) {
+    val context = LocalContext.current
+    val calendar = Calendar.getInstance()
+
+    var customerName by remember { mutableStateOf(job.customerName) }
+    var serviceType by remember { mutableStateOf(job.serviceType) }
+    var location by remember { mutableStateOf(job.location) }
+    var contactNumber by remember { mutableStateOf(job.contactNumber) }
+    var issueDescription by remember { mutableStateOf(job.issueDescription) }
+    var serviceDate by remember { mutableStateOf(job.serviceDate) }
+    var serviceTime by remember { mutableStateOf(job.serviceTime) }
+
+    // Technicians Dropdown State
+    val initialTech = technicians.firstOrNull { it.email.equals(job.assignedTechnician, ignoreCase = true) }
+    var selectedTech by remember { mutableStateOf(initialTech) }
+    var selectedTechName by remember { mutableStateOf(initialTech?.let { 
+        if (it.expertise.isNotEmpty()) "${it.fullName} (${it.expertise})" else it.fullName
+    } ?: "") }
+    var dropdownExpanded by remember { mutableStateOf(false) }
+
+    // Date Picker Dialog
+    val datePickerDialog = DatePickerDialog(
+        context,
+        { _, year, month, dayOfMonth ->
+            serviceDate = "${month + 1}/$dayOfMonth/$year"
+        },
+        calendar.get(Calendar.YEAR),
+        calendar.get(Calendar.MONTH),
+        calendar.get(Calendar.DAY_OF_MONTH)
+    )
+
+    // Time Picker Dialog
+    val timePickerDialog = TimePickerDialog(
+        context,
+        { _, hourOfDay, minute ->
+            val formatHour = if (hourOfDay > 12) hourOfDay - 12 else if (hourOfDay == 0) 12 else hourOfDay
+            val amPm = if (hourOfDay >= 12) "PM" else "AM"
+            val formatMinute = String.format("%02d", minute)
+            serviceTime = String.format("%02d:%s %s", formatHour, formatMinute, amPm)
+        },
+        calendar.get(Calendar.HOUR_OF_DAY),
+        calendar.get(Calendar.MINUTE),
+        false
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .imePadding()
+            .padding(horizontal = 24.dp)
+            .padding(bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = "Edit Job Details", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = TextDark)
+            IconButton(onClick = onClose) {
+                Icon(imageVector = Icons.Default.Close, contentDescription = "Close")
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .heightIn(max = 400.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Customer Name
+            OutlinedTextField(
+                value = customerName,
+                onValueChange = { customerName = it },
+                label = { Text("Customer Name") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = YellowPrimary,
+                    unfocusedBorderColor = CardBorder
+                )
+            )
+
+            // Service Type
+            OutlinedTextField(
+                value = serviceType,
+                onValueChange = { serviceType = it },
+                label = { Text("Service Type") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = YellowPrimary,
+                    unfocusedBorderColor = CardBorder
+                )
+            )
+
+            // Issue Description
+            OutlinedTextField(
+                value = issueDescription,
+                onValueChange = { issueDescription = it },
+                label = { Text("Issue Description") },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 3,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = YellowPrimary,
+                    unfocusedBorderColor = CardBorder
+                )
+            )
+
+            // Service Location
+            OutlinedTextField(
+                value = location,
+                onValueChange = { location = it },
+                label = { Text("Service Location") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = YellowPrimary,
+                    unfocusedBorderColor = CardBorder
+                )
+            )
+
+            // Contact Number
+            OutlinedTextField(
+                value = contactNumber,
+                onValueChange = { contactNumber = it },
+                label = { Text("Contact Number") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = YellowPrimary,
+                    unfocusedBorderColor = CardBorder
+                )
+            )
+
+            // Date and Time Fields
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { datePickerDialog.show() }
+                ) {
+                    OutlinedTextField(
+                        value = serviceDate,
+                        onValueChange = {},
+                        label = { Text("Service Date") },
+                        readOnly = true,
+                        enabled = false,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            disabledBorderColor = CardBorder,
+                            disabledTextColor = TextDark,
+                            disabledLabelColor = TextMuted
+                        )
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { timePickerDialog.show() }
+                ) {
+                    OutlinedTextField(
+                        value = serviceTime,
+                        onValueChange = {},
+                        label = { Text("Service Time") },
+                        readOnly = true,
+                        enabled = false,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            disabledBorderColor = CardBorder,
+                            disabledTextColor = TextDark,
+                            disabledLabelColor = TextMuted
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Technician Assignment Dropdown
+            Text(
+                text = "Assign to Technician",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextDark,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+
+            Box(modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = selectedTechName.ifEmpty { "Select a Technician" },
+                    onValueChange = {},
+                    readOnly = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    trailingIcon = { Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Dropdown") },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = YellowPrimary,
+                        unfocusedBorderColor = CardBorder,
+                        focusedTextColor = TextDark,
+                        unfocusedTextColor = TextDark
+                    )
+                )
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clickable { dropdownExpanded = true }
+                )
+
+                DropdownMenu(
+                    expanded = dropdownExpanded,
+                    onDismissRequest = { dropdownExpanded = false },
+                    modifier = Modifier
+                        .fillMaxWidth(0.9f)
+                        .background(CardBg)
+                ) {
+                    if (technicians.isEmpty()) {
+                        DropdownMenuItem(
+                            text = { Text("No technicians registered yet", color = TextMuted) },
+                            onClick = { dropdownExpanded = false }
+                        )
+                    } else {
+                        technicians.forEach { tech ->
+                            DropdownMenuItem(
+                                text = {
+                                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                        Text(text = tech.fullName, fontWeight = FontWeight.Bold, color = TextDark)
+                                        Text(text = "${tech.email} | 📞 ${tech.contactNumber}", fontSize = 11.sp, color = TextMuted)
+                                        if (tech.expertise.isNotEmpty()) {
+                                            Text(text = "Expertise: ${tech.expertise}", fontSize = 11.sp, color = YellowText, fontWeight = FontWeight.Medium)
+                                        }
+                                    }
+                                },
+                                onClick = {
+                                    selectedTech = tech
+                                    selectedTechName = if (tech.expertise.isNotEmpty()) {
+                                        "${tech.fullName} (${tech.expertise})"
+                                    } else {
+                                        tech.fullName
+                                    }
+                                    dropdownExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Save Button
+        Button(
+            onClick = {
+                if (customerName.isBlank() || serviceType.isBlank() || location.isBlank() ||
+                    contactNumber.isBlank() || serviceDate.isBlank() || serviceTime.isBlank() ||
+                    selectedTech == null
+                ) {
+                    CustomToastManager.showToast("Please fill in all fields and assign a technician.", isErrorToast = true)
+                } else {
+                    val updatedJob = job.copy(
+                        customerName = customerName,
+                        serviceType = serviceType,
+                        issueDescription = issueDescription,
+                        assignedTechnician = selectedTech!!.email,
+                        serviceDate = serviceDate,
+                        serviceTime = serviceTime,
+                        contactNumber = contactNumber,
+                        location = location
+                    )
+                    onSave(updatedJob)
+                }
+            },
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = YellowPrimary, contentColor = Color.White),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text("Save Changes", fontWeight = FontWeight.Bold, fontSize = 16.sp)
         }
     }
 }

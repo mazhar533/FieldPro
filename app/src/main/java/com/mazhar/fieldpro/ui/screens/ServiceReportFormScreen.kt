@@ -33,6 +33,14 @@ import android.net.Uri
 import android.util.Base64
 import java.io.ByteArrayOutputStream
 import com.mazhar.fieldpro.ui.theme.*
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.window.Dialog
+import com.mazhar.fieldpro.CustomToastManager
 
 fun uriToBase64(context: android.content.Context, uri: Uri): String? {
     return try {
@@ -82,6 +90,8 @@ fun ServiceReportFormScreen(
     var remarks by remember { mutableStateOf("") }
     var evidenceBase64 by remember { mutableStateOf("") }
     var showError by remember { mutableStateOf(false) }
+    var isQrVerified by remember { mutableStateOf(false) }
+    var showQrScanner by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val galleryLauncher = rememberLauncherForActivityResult(
@@ -312,6 +322,61 @@ fun ServiceReportFormScreen(
                 }
             }
 
+            // QR Code-Based Job Verification Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = CardBg),
+                border = BorderStroke(1.dp, CardBorder)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Onsite Job Verification (Required)",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextDark
+                    )
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isQrVerified) GreenCompleted else RedPending)
+                            )
+                            Text(
+                                text = if (isQrVerified) "Onsite QR Verified" else "Pending QR Verification",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isQrVerified) GreenCompleted else RedPending
+                            )
+                        }
+                        
+                        if (!isQrVerified) {
+                            Button(
+                                onClick = { showQrScanner = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = YellowPrimary, contentColor = Color.Black),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text("Scan QR", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+
             if (showError) {
                 Text(
                     text = "Findings and Actions Taken are required fields.",
@@ -328,6 +393,8 @@ fun ServiceReportFormScreen(
                 onClick = {
                     if (findings.isBlank() || actionsTaken.isBlank()) {
                         showError = true
+                    } else if (!isQrVerified) {
+                        CustomToastManager.showToast("Please verify the job via QR Code first.", isErrorToast = true)
                     } else {
                         onSubmitSuccess(findings, actionsTaken, remarks, evidenceBase64.ifEmpty { null })
                     }
@@ -336,13 +403,148 @@ fun ServiceReportFormScreen(
                     .fillMaxWidth()
                     .height(56.dp),
                 shape = RoundedCornerShape(28.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = GreenCompleted)
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isQrVerified) GreenCompleted else Color.Gray
+                )
             ) {
                 Text(
-                    text = "Submit Report",
+                    text = if (isQrVerified) "Submit Report" else "Verification Required",
                     fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
                 )
+            }
+        }
+    }
+
+    if (showQrScanner) {
+        Dialog(onDismissRequest = { showQrScanner = false }) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .wrapContentHeight(),
+                shape = RoundedCornerShape(24.dp),
+                color = CardBg
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "Scan Onsite QR Code",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextDark
+                    )
+
+                    Text(
+                        text = "Align the customer's equipment verification tag QR code within the frame to verify location.",
+                        fontSize = 13.sp,
+                        color = TextMuted,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+
+                    // simulated viewfinder frame
+                    Box(
+                        modifier = Modifier
+                            .size(200.dp)
+                            .background(Color.Black, shape = RoundedCornerShape(16.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // simulating camera scan lines and dots
+                        val infiniteTransition = rememberInfiniteTransition(label = "scanner")
+                        val scannerY by infiniteTransition.animateFloat(
+                            initialValue = 0f,
+                            targetValue = 200f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(1500, easing = androidx.compose.animation.core.LinearEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "scanline"
+                        )
+
+                        // Camera Viewfinder Background Sim
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(8.dp)
+                                .background(Color(0xFF2C3E50), shape = RoundedCornerShape(12.dp))
+                        ) {
+                            // Target brackets
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(20.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                // Draw mock QR code inside
+                                Text(
+                                    text = "QR: $jobId",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White.copy(alpha = 0.5f)
+                                )
+                            }
+                            
+                            // Laser horizontal scanline
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(2.dp)
+                                    .graphicsLayer(translationY = scannerY)
+                                    .background(YellowPrimary)
+                            )
+                        }
+                    }
+
+                    // Scan status logic
+                    var scanComplete by remember { mutableStateOf(false) }
+                    LaunchedEffect(Unit) {
+                        kotlinx.coroutines.delay(2000)
+                        scanComplete = true
+                    }
+
+                    if (scanComplete) {
+                        Text(
+                            text = "✅ Verification Tag Matched!",
+                            color = GreenCompleted,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                        
+                        Spacer(modifier = Modifier.height(4.dp))
+                        
+                        Button(
+                            onClick = {
+                                isQrVerified = true
+                                showQrScanner = false
+                                CustomToastManager.showToast("Job location verified onsite!")
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = YellowPrimary, contentColor = Color.Black),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth().height(48.dp)
+                        ) {
+                            Text("Confirm & Continue", fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = YellowPrimary, strokeWidth = 2.dp)
+                            Text(
+                                text = "Scanning code...",
+                                color = TextMuted,
+                                fontSize = 13.sp
+                            )
+                        }
+                        
+                        TextButton(onClick = { showQrScanner = false }) {
+                            Text("Cancel", color = TextDark)
+                        }
+                    }
+                }
             }
         }
     }

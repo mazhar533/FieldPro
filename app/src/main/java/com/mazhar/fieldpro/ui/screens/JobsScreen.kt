@@ -288,7 +288,10 @@ private fun StaggeredSlideUpItem(
 ) {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(index * 60L)
+        val delayTime = if (index < 5) index * 60L else 0L
+        if (delayTime > 0L) {
+            kotlinx.coroutines.delay(delayTime)
+        }
         visible = true
     }
     AnimatedVisibility(
